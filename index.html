@@ -600,8 +600,8 @@ function rSup(){
       +'</select></td>'
       +'<td><select '+(sMT?"":'disabled')+" onchange=\"sMI=this.value\"><option value=''>— البند —</option>"+iopts(sMT,sMI)+'</select></td>'
       +'<td><input placeholder="ملاحظات" onchange="sN=this.value"></td>'
-      +'<td><label class="fl" for="sf-n">📎 '+(sF?'✓ مرفق':'اختر صورة')+'</label>'
-        +'<input type="file" id="sf-n" style="display:none" accept="image/*,.pdf" onchange="sFPick(this.files[0],false)"></td>'
+      +'<td><label class="fl" for="sf-n">📎 '+(sF&&sF._uploading?'⏳ جارٍ الرفع...':sF&&sF._uploadDone?'✓ تم الرفع':'اختر صورة')+'</label>'
+        +'<input type="file" id="sf-n" style="display:none" accept="image/*,.pdf" onchange="sFPick(this.files[0],false)" '+(sF&&sF._uploading?'disabled':'')+'></td>'
       +'<td><div style="display:flex;gap:4px"><button class="btn ok" onclick="sSaveN()">إرسال ✓</button><button class="btn cl" onclick="sCl()">إلغاء</button></div></td>'
       +'</tr>';
   }
@@ -626,8 +626,8 @@ function rSup(){
         +'</select></td>'
         +'<td><select '+(sMT?"":'disabled')+" onchange=\"sMI=this.value\"><option value=''>— البند —</option>"+iopts(sMT,sMI)+'</select></td>'
         +'<td><input placeholder="ملاحظات" value="'+sN+'" onchange="sN=this.value"></td>'
-        +'<td><label class="fl" for="sf-e">📎 '+(sF?'✓ مرفق':'تغيير الصورة')+'</label>'
-          +'<input type="file" id="sf-e" style="display:none" accept="image/*,.pdf" onchange="sFPick(this.files[0],true)"></td>'
+        +'<td><label class="fl" for="sf-e">📎 '+(sF&&sF._uploading?'⏳ جارٍ الرفع...':sF&&sF._uploadDone?'✓ تم الرفع':'تغيير الصورة')+'</label>'
+          +'<input type="file" id="sf-e" style="display:none" accept="image/*,.pdf" onchange="sFPick(this.files[0],true)" '+(sF&&sF._uploading?'disabled':'')+'></td>'
         +'<td><div style="display:flex;gap:4px"><button class="btn ok" onclick="sSaveE()">حفظ ✓</button><button class="btn cl" onclick="sCl()">إلغاء</button></div></td>'
         +'</tr>';
     }
@@ -682,13 +682,42 @@ function sCl(){sOpen=false;sEid=null;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFU
 function sSetB(v){sB=v;sD="";sMI="";rSup();}
 function sSetD(v){sD=v;rSup();}
 function sSetMT(v){sMT=v;sMI="";rSup();}
+/* ── Cloudflare R2 Worker endpoint ── */
+var R2_WORKER = "https://fleet-images-api.ashraf-m0087.workers.dev";
+
 function sFPick(f,isEdit){
-  if(!f)return;sF=f;
-  var rd=new FileReader();rd.onload=function(e){sFUrl=e.target.result;rSup();};rd.readAsDataURL(f);
+  if(!f)return;
+  sF=f;
+  sF._uploading=true;
+  sF._uploadDone=false;
+  sFUrl=null;
+  // show placeholder while uploading
+  rSup();
+  var fd=new FormData();
+  fd.append("file",f);
+  fetch(R2_WORKER+"/upload",{method:"POST",body:fd})
+    .then(function(r){return r.json();})
+    .then(function(data){
+      if(data.url){
+        sFUrl=data.url;
+        sF._uploading=false;
+        sF._uploadDone=true;
+      } else {
+        alert("فشل رفع الصورة: "+(data.error||"خطأ غير معروف"));
+        sF=null;sFUrl=null;
+      }
+      rSup();
+    })
+    .catch(function(e){
+      alert("فشل الاتصال بخادم الصور: "+e.message+". تأكد من نشر الـ Worker.");
+      sF=null;sFUrl=null;rSup();
+    });
 }
 function sSaveN(){
   if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول المطلوبة");return;}
   if(!sF){alert("يرجى إرفاق صورة الطلب");return;}
+  if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار لحظة ثم المحاولة مجدداً");return;}
+  if(!sFUrl){alert("لم تكتمل عملية رفع الصورة، يرجى إعادة اختيار الصورة");return;}
   var d=gdrv(sB,sD);
   requests.unshift({seq:nextSeq(),id:Date.now(),branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",mtype:sMT,mitem:sMI,notes:sN,file:sF.name,fileUrl:sFUrl,status:"pending",date:today(),archived:false});
   sCl();
