@@ -1534,18 +1534,7 @@ requests.forEach(function(r){
 });
 
 /* ── PATCH action functions to record timestamps ── */
-var _origSSaveN = sSaveN;
-sSaveN = function(){
-  if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول المطلوبة");return;}
-  if(!sF){alert("يرجى إرفاق صورة الطلب");return;}
-  var d=gdrv(sB,sD);
-  var ts=nowTs();
-  requests.unshift({seq:nextSeq(),id:Date.now(),branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",
-    mtype:sMT,mitem:sMI,notes:sN,file:sF.name,fileUrl:sFUrl,status:"pending",date:ts.slice(0,10),
-    ts_submit:ts,archived:false});
-  sCl();
-  fbSaveAll();
-};
+/* OLD sSaveN removed — replaced by new version below */
 
 var _origSSaveE = sSaveE;
 sSaveE = function(){
