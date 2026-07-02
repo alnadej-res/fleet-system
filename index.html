@@ -461,6 +461,20 @@ function fbApplyRemote(data){
   if(CR && CP) gp(CP);
 }
 
+/* Check if opened as local file — Firebase won't work */
+(function(){
+  if(window.location.protocol==="file:"){
+    /* Local file mode: enable button with local data only */
+    setTimeout(function(){
+      fbReady=true;
+      var btn=document.getElementById("lp-btn");
+      if(btn){btn.disabled=false;btn.style.cursor="pointer";btn.style.background="linear-gradient(135deg,#f59e0b,#d97706)";btn.style.color="#fff";btn.textContent="دخول (وضع محلي) ←";}
+      var warn=document.getElementById("l-err");
+      if(warn){warn.style.display="block";warn.style.background="#fef3c7";warn.style.borderColor="#f59e0b";warn.style.color="#92400e";warn.textContent="⚠️ تفتح الملف محلياً — افتح الرابط من GitHub Pages للحصول على بيانات السيرفر";}
+    },500);
+  }
+})();
+
 window.addEventListener("fb-ready", function(){
   /* 1. Mark ready and enable login button IMMEDIATELY */
   fbReady = true;
