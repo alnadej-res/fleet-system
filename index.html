@@ -316,7 +316,22 @@ const db = getDatabase(fbApp);
 
 // Expose a thin global bridge so the existing non-module script can call Firebase
 window.FB = { ref, set, get, update, remove, onValue, push, child, db };
+/* Dispatch fb-ready immediately so UI is never blocked */
 window.dispatchEvent(new Event("fb-ready"));
+</script>
+<script>
+/* Enable login button immediately on page load — no Firebase wait */
+document.addEventListener("DOMContentLoaded", function(){
+  var btn = document.getElementById("lp-btn");
+  if(btn){
+    btn.disabled = false;
+    btn.style.cursor = "pointer";
+    btn.style.background = "linear-gradient(135deg,#2563eb,#1d4ed8)";
+    btn.style.color = "#fff";
+    btn.style.borderColor = "#1d4ed8";
+    btn.textContent = "دخول ←";
+  }
+});
 </script>
 </head>
 <body>
@@ -344,7 +359,7 @@ window.dispatchEvent(new Event("fb-ready"));
           style="width:100%;padding:11px 14px;font-size:14px;background:#fff;border:1px solid #d1d5db;border-radius:9px;color:#1f2937;direction:rtl;outline:none;font-family:inherit"
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
-      <button id="lp-btn" onclick="doLoginStep1()" disabled style="width:100%;padding:12px;background:#e5e7eb;color:#9ca3af;border:1px solid #d1d5db;border-radius:9px;font-size:15px;font-weight:700;cursor:not-allowed;font-family:inherit;transition:all .2s">⏳ جارٍ الاتصال...</button>
+      <button id="lp-btn" onclick="doLoginStep1()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
       <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026</div>
     </div>
   </div>
@@ -437,8 +452,9 @@ var fbReady = false;
 var fbSyncing = false; // guard to avoid write-loops while applying remote data
 
 function fbSaveAll(){
-  /* Triple guard: must be ready + not syncing + user logged in */
-  if(!fbReady || fbSyncing || !CR) return;
+  /* Guards: not syncing + user logged in (fbReady optional — FB may connect later) */
+  if(fbSyncing || !CR) return;
+  if(!window.FB){return;} /* Firebase not loaded yet */
   window.FB.set(window.FB.ref(window.FB.db, "/"), {
     USERS: USERS,
     DB: DB,
@@ -461,34 +477,10 @@ function fbApplyRemote(data){
   if(CR && CP) gp(CP);
 }
 
-/* Check if opened as local file — Firebase won't work */
-(function(){
-  if(window.location.protocol==="file:"){
-    /* Local file mode: enable button with local data only */
-    setTimeout(function(){
-      fbReady=true;
-      var btn=document.getElementById("lp-btn");
-      if(btn){btn.disabled=false;btn.style.cursor="pointer";btn.style.background="linear-gradient(135deg,#f59e0b,#d97706)";btn.style.color="#fff";btn.textContent="دخول (وضع محلي) ←";}
-      var warn=document.getElementById("l-err");
-      if(warn){warn.style.display="block";warn.style.background="#fef3c7";warn.style.borderColor="#f59e0b";warn.style.color="#92400e";warn.textContent="⚠️ تفتح الملف محلياً — افتح الرابط من GitHub Pages للحصول على بيانات السيرفر";}
-    },500);
-  }
-})();
-
 window.addEventListener("fb-ready", function(){
   /* 1. Mark ready and enable login button IMMEDIATELY */
   fbReady = true;
-  var btn=document.getElementById("lp-btn");
-  if(btn){
-    btn.disabled=false;
-    btn.style.cursor="pointer";
-    btn.style.background="linear-gradient(135deg,#2563eb,#1d4ed8)";
-    btn.style.color="#fff";
-    btn.style.borderColor="#1d4ed8";
-    btn.textContent="دخول ←";
-  }
-
-  /* 2. Connect to Firebase in background */
+  /* Connect to Firebase in background */
   try{
     var rootRef = window.FB.ref(window.FB.db, "/");
 
@@ -1935,7 +1927,7 @@ function saDoChgPw(id){
 
 /* ── TILE LOGIN STEP 1+2 ── */
 function doLoginStep1(){
-  if(!fbReady){alert("جارٍ الاتصال بالخادم...");return;}
+  /* Login works with local USERS immediately; Firebase syncs in background */
   var u=document.getElementById("lu").value.trim();
   var p=document.getElementById("lp-pw").value;
   var user=USERS.find(function(x){return x.username===u&&x.password===p&&x.active;});
@@ -2043,7 +2035,7 @@ logout=function(){
 /* patch fb-ready to enable btn properly */
 var _origFbHandler=null;
 window.addEventListener("fb-ready",function(){
-  buildTilesBlurred();
+  try{buildTilesBlurred();}catch(e){}
 });;
 
 /* clock */
