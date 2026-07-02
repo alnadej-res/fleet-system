@@ -462,34 +462,48 @@ function fbApplyRemote(data){
 }
 
 window.addEventListener("fb-ready", function(){
+  /* 1. Mark ready and enable login button IMMEDIATELY */
   fbReady = true;
   var btn=document.getElementById("lp-btn");
-  if(btn){btn.disabled=false;btn.style.opacity="1";btn.style.cursor="pointer";btn.textContent="دخول ←";}
-  var rootRef = window.FB.ref(window.FB.db, "/");
-  window.FB.get(rootRef).then(function(snap){
-    var raw = snap.exists() ? snap.val() : null;
-    /* Strict guard: seed ONLY if db is fully empty */
-    var hasRealData = raw && (
-      (raw.USERS && (Array.isArray(raw.USERS)?raw.USERS.length:Object.keys(raw.USERS||{}).length) > 0) ||
-      (raw.requests && Object.keys(raw.requests||{}).length > 0) ||
-      (raw.seqCounter && raw.seqCounter > 0) ||
-      (raw.DB && raw.DB.drivers && (Array.isArray(raw.DB.drivers)?raw.DB.drivers.length:Object.keys(raw.DB.drivers||{}).length) > 0)
-    );
-    if(!hasRealData){
-      /* Database is truly empty — first time setup only */
-      console.log("Firebase empty — first time setup");
-      window.FB.set(rootRef,{USERS:USERS,DB:DB,requests:[],seqCounter:0});
-    }
-    /* Read-only realtime listener */
-    window.FB.onValue(rootRef, function(snap2){
-      var d = snap2.val();
-      if(!d) return;
-      fbApplyRemote(d);
+  if(btn){
+    btn.disabled=false;
+    btn.style.cursor="pointer";
+    btn.style.background="linear-gradient(135deg,#2563eb,#1d4ed8)";
+    btn.style.color="#fff";
+    btn.style.borderColor="#1d4ed8";
+    btn.textContent="دخول ←";
+  }
+
+  /* 2. Connect to Firebase in background */
+  try{
+    var rootRef = window.FB.ref(window.FB.db, "/");
+
+    /* Seed guard — only write if DB is completely empty */
+    window.FB.get(rootRef).then(function(snap){
+      var raw = snap.exists() ? snap.val() : null;
+      var hasRealData = raw && (
+        (raw.USERS && (Array.isArray(raw.USERS)?raw.USERS.length:Object.keys(raw.USERS||{}).length) > 0) ||
+        (raw.requests && Object.keys(raw.requests||{}).length > 0) ||
+        (raw.seqCounter && raw.seqCounter > 0) ||
+        (raw.DB && raw.DB.drivers && (Array.isArray(raw.DB.drivers)?raw.DB.drivers.length:Object.keys(raw.DB.drivers||{}).length) > 0)
+      );
+      if(!hasRealData){
+        console.log("Firebase empty — first time setup");
+        window.FB.set(rootRef,{USERS:USERS,DB:DB,requests:[],seqCounter:0});
+      }
+      /* Attach realtime listener — read only */
+      window.FB.onValue(rootRef, function(snap2){
+        var d = snap2.val();
+        if(!d) return;
+        fbApplyRemote(d);
+      });
+    }).catch(function(e){
+      console.error("Firebase get error:",e);
     });
-  }).catch(function(e){
+  }catch(e){
     console.error("Firebase init error:",e);
-  });
-});
+  }
+});;
 
 /* check & auto-archive when mntStatus set */
 function checkArchive(id){
@@ -697,11 +711,7 @@ function rSup(){
       +'<td style="font-size:12px">'+(drv?(drv.make||"—"):'<span style="color:var(--txt3)">—</span>')+'</td>'
       +'<td style="font-size:12px">'+(drv?(drv.model||"—"):'<span style="color:var(--txt3)">—</span>')+'</td>'
       +'<td style="font-size:12px">'+(drv?(drv.year||"—"):'<span style="color:var(--txt3)">—</span>')+'</td>'
-      +'<td><select onchange="sSetMT(this.value)"><option value="">— النوع —</option>'
-        +'<option value="periodic" '+(sMT==="periodic"?"selected":"")+'>🔄 دورية</option>'
-        +'<option value="emergency" '+(sMT==="emergency"?"selected":"")+'>⚠️ طارئة</option>'
-      +'</select></td>'
-      +(sMT?sItemsCell(false):'<td><span style="color:var(--txt3);font-size:12px">اختر النوع أولاً</span></td>')
+      +(sItemsPickerCell(false))
       +'<td><input placeholder="ملاحظات" onchange="sN=this.value"></td>'
       +'<td><label class="fl" for="sf-n">📎 '+(sF?'✓ مرفق':'اختر صورة')+'</label>'
         +'<input type="file" id="sf-n" style="display:none" accept="image/*,.pdf" onchange="sFPick(this.files[0],false)"></td>'
@@ -2019,10 +2029,8 @@ logout=function(){
 /* patch fb-ready to enable btn properly */
 var _origFbHandler=null;
 window.addEventListener("fb-ready",function(){
-  var btn=document.getElementById("lp-btn");
-  if(btn){btn.disabled=false;btn.style.cursor="pointer";btn.style.background="linear-gradient(135deg,#2563eb,#1d4ed8)";btn.style.color="#fff";btn.style.borderColor="#1d4ed8";btn.textContent="دخول ←";}
   buildTilesBlurred();
-});
+});;
 
 /* clock */
 function updateClock(){
@@ -2281,46 +2289,84 @@ function showMonthlyExportPicker(){
   document.body.appendChild(el);
 }
 
-</script>
+/* ══ NEW ITEM PICKER — item first, then type per item ══ */
 
-<!-- SELF CHANGE PASSWORD MODAL -->
-<div id="self-pw-modal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);align-items:center;justify-content:center;direction:rtl">
-  <div style="background:#fff;border-radius:14px;padding:32px 36px;width:360px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="font-size:16px;font-weight:800;margin-bottom:4px;color:var(--txt)">🔑 تغيير كلمة المرور</div>
-    <div style="font-size:12px;color:var(--txt3);margin-bottom:20px" id="self-pw-name"></div>
-    <div id="self-pw-err" style="background:var(--rd-b);border:1px solid var(--rd-br);border-radius:7px;padding:7px 12px;font-size:13px;color:var(--rd);margin-bottom:12px;display:none"></div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:4px">كلمة المرور الحالية</label>
-      <input id="self-pw-old" type="password" placeholder="••••••••" style="width:100%;padding:9px 12px;font-size:14px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;font-family:inherit">
-    </div>
-    <div style="margin-bottom:12px">
-      <label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:4px">كلمة المرور الجديدة</label>
-      <input id="self-pw-new" type="password" placeholder="••••••••" style="width:100%;padding:9px 12px;font-size:14px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;font-family:inherit">
-    </div>
-    <div style="margin-bottom:20px">
-      <label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:4px">تأكيد كلمة المرور الجديدة</label>
-      <input id="self-pw-new2" type="password" placeholder="••••••••" style="width:100%;padding:9px 12px;font-size:14px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;font-family:inherit" onkeydown="if(event.key==='Enter')doSelfChgPw()">
-    </div>
-    <div style="display:flex;gap:8px">
-      <button onclick="doSelfChgPw()" style="flex:1;padding:10px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">حفظ</button>
-      <button onclick="closeSelfChgPw()" style="padding:10px 18px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:14px;cursor:pointer;font-family:inherit">إلغاء</button>
-    </div>
-  </div>
-</div>
-<div id="save-indicator"><span id="save-icon">✓</span><span id="save-text">تم الحفظ</span></div>
-<input type="file" id="excel-import-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleExcelImport(this.files[0])">
-<!-- REQUEST DETAIL MODAL -->
-<div id="req-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:20px">
-  <div id="req-modal-box" style="background:#fff;border-radius:16px;width:100%;max-width:760px;max-height:90vh;overflow-y:auto;box-shadow:0 24px 60px rgba(0,0,0,.3);position:relative">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border);position:sticky;top:0;background:#fff;z-index:2;border-radius:16px 16px 0 0">
-      <div style="display:flex;align-items:center;gap:10px">
-        <span id="md-seq" style="font-family:Courier New,monospace;font-size:14px;font-weight:700;color:var(--acc);background:var(--acc-l);border:1px solid var(--bl-br);border-radius:6px;padding:3px 10px"></span>
-        <span id="md-badge"></span>
-      </div>
-      <button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--txt3);line-height:1">✕</button>
-    </div>
-    <div id="md-body" style="padding:22px"></div>
-  </div>
-</div>
-</body>
-</html>
+/* sItems = [{item:"اسم البند", mtype:"periodic"|"emergency"}] */
+
+function sGetAllItems(){
+  /* Combined list from both periodic and emergency */
+  var all=[];
+  (DB.items.periodic||[]).forEach(function(i){ if(all.indexOf(i)<0)all.push(i); });
+  (DB.items.emergency||[]).forEach(function(i){ if(all.indexOf(i)<0)all.push(i); });
+  return all;
+}
+
+function sAddItem(itemName){
+  var exists=sItems.find(function(x){return x.item===itemName;});
+  if(!exists) sItems.push({item:itemName,mtype:"periodic"});
+  rSup();
+}
+function sRemoveItem(idx){
+  sItems.splice(idx,1);
+  rSup();
+}
+
+function sSetItemType(idx,mtype){
+  if(sItems[idx]) sItems[idx].mtype=mtype;
+  rSup();
+}
+
+function sAddOther2(){
+  var v=(sOther||"").trim();
+  if(!v){ alert("اكتب اسم البند أولاً"); return; }
+  /* add to both lists if not exists */
+  if((DB.items.periodic||[]).indexOf(v)<0) DB.items.periodic.unshift(v);
+  var exists=sItems.find(function(x){return x.item===v;});
+  if(!exists) sItems.push({item:v,mtype:"periodic"});
+  sOther=""; fbSaveAll(); rSup();
+}
+
+function sItemsPickerCell(isEdit){
+  var allItems=sGetAllItems();
+  var sfx=isEdit?"e":"n";
+  var inpId="s-other-"+sfx+"2";
+  var divId="items-picker-"+sfx;
+
+  var chipsHtml="";
+  sItems.forEach(function(obj,ci){
+    var isPer=(obj.mtype==="periodic");
+    var bsP='cursor:pointer;font-size:11px;padding:2px 7px;border-radius:10px;border:1px solid ';
+    var stylePer=bsP+(isPer?'var(--bl);background:var(--bl-b);color:var(--bl)':'#ddd;background:transparent;color:#bbb');
+    var styleEm =bsP+(!isPer?'var(--rd);background:var(--rd-b);color:var(--rd)':'#ddd;background:transparent;color:#bbb');
+    chipsHtml+='<div style="display:flex;align-items:center;gap:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:5px 8px;margin-bottom:4px">'
+      +'<span style="font-size:12px;font-weight:600;color:var(--txt);flex:1">'+obj.item+'</span>'
+      +'<span style="'+stylePer+'" onclick="sSetItemType('+ci+',\'periodic\')">\u{1F504} دوري</span>'
+      +'<span style="'+styleEm+'" onclick="sSetItemType('+ci+',\'emergency\')">\u26A0\uFE0F طارئ</span>'
+      +'<button onclick="sRemoveItem('+ci+')" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;line-height:1;padding:0 3px">\u2715</button>'
+      +'</div>';
+  });
+
+  var optsHtml="";
+  allItems.forEach(function(i){
+    var already=!!sItems.find(function(x){return x.item===i;});
+    optsHtml+='<option value="'+i+'"'+(already?' disabled':'')+'>'+(already?'\u2713 ':'')+i+'</option>';
+  });
+
+  return '<td style="min-width:290px">'
+    +(sItems.length?'<div style="margin-bottom:6px">'+chipsHtml+'</div>':'')
+    +'<select id="item-sel-'+sfx+'" onchange="sPickItem(this)" style="width:100%;padding:6px 8px;font-size:12px;border:1px solid var(--bl-br);border-radius:6px;direction:rtl;outline:none;background:#fff">'
+    +'<option value="">\u2014 \u0627\u062E\u062A\u0631 \u0628\u0646\u062F\u0627\u064B \u0644\u0644\u0625\u0636\u0627\u0641\u0629 \u2014</option>'
+    +optsHtml+'</select>'
+    +'<div style="display:flex;gap:4px;margin-top:5px">'
+    +'<input id="'+inpId+'" placeholder="\u0623\u0648 \u0627\u0643\u062A\u0628 \u0628\u0646\u062F\u0627\u064B \u062C\u062F\u064A\u062F\u0627\u064B..." value="'+sOther+'" onchange="sOther=this.value" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--bl-br);border-radius:6px;direction:rtl;outline:none">'
+    +'<button class="btn ok" style="padding:5px 10px;font-size:12px;white-space:nowrap" onclick="sAddOther2()">\u002B \u0625\u0636\u0627\u0641\u0629</button>'
+    +'</div>'
+    +'</td>';
+}
+
+function sPickItem(el){
+  var v=el.value;
+  if(v){sAddItem(v);el.value="";}
+}
+
+>
