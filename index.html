@@ -520,7 +520,7 @@ function checkArchive(id){
     if(r.status==="approved"&&(r.mntStatus==="done"||r.mntStatus==="undone"))
       return Object.assign({},r,{archived:true});
     return r;
-  });
+  });;fbSaveAll();
 }
 
 var roles={
@@ -660,9 +660,10 @@ function rDash(){
 /* ══ SUPERVISOR ══ */
 function applyFSup(list){
   return list.filter(function(r){
-    if(fSup.q){var q=fSup.q;if(r.seq.indexOf(q)<0&&r.driver.indexOf(q)<0&&r.plate.indexOf(q)<0&&r.mitem.indexOf(q)<0)return false;}
+    if(fSup.q){var q=fSup.q;if((r.seq||'').indexOf(q)<0&&(r.driver||'').indexOf(q)<0&&(r.plate||'').indexOf(q)<0&&(r.mitem||'').indexOf(q)<0)return false;}
     if(fSup.branch&&r.branch!==fSup.branch)return false;
-    if(fSup.status&&r.status!==fSup.status)return false;
+    if(fSup.status==='archived'){if(!r.archived)return false;}
+    else if(fSup.status){if(r.status!==fSup.status)return false;}
     if(fSup.mtype&&r.mtype!==fSup.mtype)return false;
     return true;
   });
@@ -700,7 +701,8 @@ function archSectionSup(list,show,toggleFn){
 function rSup(){
   var active=requests.filter(function(r){return !r.archived;});
   var archived=requests.filter(function(r){return r.archived;});
-  var filtered=applyFSup(active);
+  var allForFilter=(fSup.status==='archived') ? requests : active;
+  var filtered=applyFSup(allForFilter);
   var pend=active.filter(function(r){return r.status==="pending";}).length;
   var rej=active.filter(function(r){return r.status==="rejected";}).length;
 
@@ -788,7 +790,8 @@ function rSup(){
     +'<select onchange="fSup.status=this.value;rSup()"><option value="">كل الحالات</option>'
       +'<option value="pending" '+(fSup.status==="pending"?"selected":"")+'>بانتظار الموافقة</option>'
       +'<option value="approved" '+(fSup.status==="approved"?"selected":"")+'>موافق عليه</option>'
-      +'<option value="rejected" '+(fSup.status==="rejected"?"selected":"")+'>مرفوض</option></select>'
+      +'<option value="rejected" '+(fSup.status==="rejected"?"selected":"")+'>مرفوض</option>'
+      +'<option value="archived" '+(fSup.status==="archived"?"selected":"")+'>📦 مؤرشف</option></select>'
     +'<select onchange="fSup.mtype=this.value;rSup()"><option value="">كل الأنواع</option>'
       +'<option value="periodic" '+(fSup.mtype==="periodic"?"selected":"")+'>دورية</option>'
       +'<option value="emergency" '+(fSup.mtype==="emergency"?"selected":"")+'>طارئة</option></select>'
@@ -838,9 +841,10 @@ function sSaveE(){
 /* ══ ADMIN ══ */
 function applyFAdm(list){
   return list.filter(function(r){
-    if(fAdm.q){var q=fAdm.q;if(r.seq.indexOf(q)<0&&r.driver.indexOf(q)<0&&r.plate.indexOf(q)<0)return false;}
+    if(fAdm.q){var q=fAdm.q;if((r.seq||'').indexOf(q)<0&&(r.driver||'').indexOf(q)<0&&(r.plate||'').indexOf(q)<0)return false;}
     if(fAdm.branch&&r.branch!==fAdm.branch)return false;
-    if(fAdm.status&&r.status!==fAdm.status)return false;
+    if(fAdm.status==='archived'){if(!r.archived)return false;}
+    else if(fAdm.status){if(r.status!==fAdm.status)return false;}
     if(fAdm.mtype&&r.mtype!==fAdm.mtype)return false;
     return true;
   });
@@ -848,7 +852,11 @@ function applyFAdm(list){
 function rAdmin(){
   var active=requests.filter(function(r){return !r.archived;});
   var archived=requests.filter(function(r){return r.archived;});
-  var filtered=applyFAdm(active);
+  /* إذا الفلتر يطلب المؤرشفة أو الكل — أضف المؤرشفة للقائمة */
+  var allForFilter = (fAdm.status==='archived' || fAdm.showArchived)
+    ? requests  /* كل الطلبات */
+    : active;   /* النشطة فقط */
+  var filtered=applyFAdm(allForFilter);
   var pend=active.filter(function(r){return r.status==="pending";}).length;
 
   var rows=filtered.map(function(r){
@@ -880,7 +888,7 @@ function rAdmin(){
     return mr+rr;
   }).join("");
   if(!filtered.length)rows='<tr><td colspan="9"><div class="empty"><div class="ei">🔍</div><div class="et">لا توجد نتائج</div></div></td></tr>';
-  var archRows=archSection(archived,archShowAdm,"archShowAdm=!archShowAdm;rAdmin()",9);
+  var archRows=(fAdm.status==="archived")?"":archSection(archived,archShowAdm,"archShowAdm=!archShowAdm;rAdmin()",9);
 
   document.getElementById("main").innerHTML=
     '<div class="ph"><div class="ph-left"><div class="pt">مراجعة الطلبات</div><div class="ps">شاشة الإدارة</div></div>'
@@ -891,7 +899,8 @@ function rAdmin(){
     +'<select onchange="fAdm.status=this.value;rAdmin()"><option value="">كل الحالات</option>'
       +'<option value="pending" '+(fAdm.status==="pending"?"selected":"")+'>بانتظار الموافقة</option>'
       +'<option value="approved" '+(fAdm.status==="approved"?"selected":"")+'>موافق عليه</option>'
-      +'<option value="rejected" '+(fAdm.status==="rejected"?"selected":"")+'>مرفوض</option></select>'
+      +'<option value="rejected" '+(fAdm.status==="rejected"?"selected":"")+'>مرفوض</option>'
+      +'<option value="archived" '+(fAdm.status==="archived"?"selected":"")+'>📦 مؤرشف</option></select>'
     +'<select onchange="fAdm.mtype=this.value;rAdmin()"><option value="">كل الأنواع</option>'
       +'<option value="periodic">دورية</option><option value="emergency">طارئة</option></select>'
     +'<button class="btn cl" onclick="fAdm={q:\'\',branch:\'\',status:\'\',mtype:\'\'};rAdmin()">مسح</button></div>'
@@ -900,13 +909,14 @@ function rAdmin(){
     +'<th>رقم الطلب</th><th>السائق</th><th>السيارة</th><th>نوع الصيانة</th><th>ملاحظات</th><th>الصورة</th><th>الحالة</th><th>التاريخ</th><th>الإجراء</th>'
     +'</tr></thead><tbody>'+rows+archRows+'</tbody></table></div></div>';
 }
-function aApprove(id){requests=requests.map(function(r){return r.id===id?Object.assign({},r,{status:"approved"}):r;});aRid=null;rAdmin();}
+function aApprove(id){var ts=nowTs();requests=requests.map(function(r){return r.id===id?Object.assign({},r,{status:"approved",ts_approve:ts}):r;});aRid=null;fbSaveAll();rAdmin();}
 function aShowRej(id){aRid=id;rAdmin();}
 function aDoRej(id){
   var el=document.getElementById("rr-"+id);var reason=el?el.value.trim():"";
   if(!reason){alert("يرجى كتابة سبب الرفض");return;}
-  requests=requests.map(function(r){return r.id===id?Object.assign({},r,{status:"rejected",rejectReason:reason}):r;});
-  aRid=null;rAdmin();
+  var ts=nowTs();
+  requests=requests.map(function(r){return r.id===id?Object.assign({},r,{status:"rejected",rejectReason:reason,ts_reject:ts}):r;});
+  aRid=null;fbSaveAll();rAdmin();
 }
 
 /* ══ MAINTENANCE ══ */
@@ -955,7 +965,7 @@ function rMnt(){
     return mr+ur;
   }).join("");
   if(!filtered.length)rows='<tr><td colspan="8"><div class="empty"><div class="ei">🔍</div><div class="et">لا توجد نتائج</div></div></td></tr>';
-  var archRows=archSection(archived,archShowMnt,"archShowMnt=!archShowMnt;rMnt()",8);
+  var archRows=(fMnt&&fMnt.status==="archived")?"":archSection(archived,archShowMnt,"archShowMnt=!archShowMnt;rMnt()",8);
 
   document.getElementById("main").innerHTML=
     '<div class="ph"><div class="ph-left"><div class="pt">تنفيذ الصيانة</div><div class="ps">الطلبات الموافق عليها فقط</div></div>'
@@ -976,14 +986,14 @@ function rMnt(){
 }
 function mDone(id){
   requests=requests.map(function(r){return r.id===id?Object.assign({},r,{mntStatus:"done",mntNote:"تمت بتاريخ "+today()}):r;});
-  checkArchive(id);mUid=null;rMnt();
+  checkArchive(id);mUid=null;rMnt();;fbSaveAll();
 }
 function mShowU(id){mUid=id;rMnt();}
 function mDoU(id){
   var el=document.getElementById("ur-"+id);var reason=el?el.value.trim():"";
   if(!reason){alert("يرجى كتابة سبب عدم المعالجة");return;}
   requests=requests.map(function(r){return r.id===id?Object.assign({},r,{mntStatus:"undone",mntNote:reason}):r;});
-  checkArchive(id);mUid=null;rMnt();
+  checkArchive(id);mUid=null;fbSaveAll();rMnt();
 }
 
 /* ══ SYSADMIN ══ */
@@ -1431,6 +1441,7 @@ function rReports(){
     +'<div class="rpt-section"><div class="rpt-title">🔧 أكثر بنود الصيانة تكراراً</div>'+barChart(byItem,"linear-gradient(90deg,#7c3aed,#a78bfa)")+'</div>'
     +'<div class="rpt-section"><div class="rpt-title">⚙️ توزيع نوع الصيانة</div>'+barChart(byMtype,"linear-gradient(90deg,#16a34a,#4ade80)")+'</div>'
     +'<div class="rpt-section"><div class="rpt-title">👤 السائقون الأكثر طلباً</div>'+barChart(byDriver,"linear-gradient(90deg,#b45309,#fbbf24)")+'</div>'
+    +'<div class="rpt-section"><div class="rpt-title">🚗 السيارات الأكثر صيانةً</div>'+barChart(byCar,"linear-gradient(90deg,#dc2626,#f87171)")+'</div>'
     +'</div>'
 
     /* car status table */
@@ -1701,7 +1712,7 @@ rAdmin = function(){
     return mr+rr;
   }).join("");
   if(!filtered.length)rows='<tr><td colspan="9"><div class="empty"><div class="ei">🔍</div><div class="et">لا توجد نتائج</div></div></td></tr>';
-  var archRows=archSection(archived,archShowAdm,"archShowAdm=!archShowAdm;rAdmin()",9);
+  var archRows=(fAdm.status==="archived")?"":archSection(archived,archShowAdm,"archShowAdm=!archShowAdm;rAdmin()",9);
 
   document.getElementById("main").innerHTML=
     '<div class="ph"><div class="ph-left"><div class="pt">مراجعة الطلبات</div><div class="ps">شاشة الإدارة — اضغط على أي طلب لعرض تفاصيله</div></div>'
@@ -1712,7 +1723,8 @@ rAdmin = function(){
     +'<select onchange="fAdm.status=this.value;rAdmin()"><option value="">كل الحالات</option>'
       +'<option value="pending" '+(fAdm.status==="pending"?"selected":"")+'>بانتظار الموافقة</option>'
       +'<option value="approved" '+(fAdm.status==="approved"?"selected":"")+'>موافق عليه</option>'
-      +'<option value="rejected" '+(fAdm.status==="rejected"?"selected":"")+'>مرفوض</option></select>'
+      +'<option value="rejected" '+(fAdm.status==="rejected"?"selected":"")+'>مرفوض</option>'
+      +'<option value="archived" '+(fAdm.status==="archived"?"selected":"")+'>📦 مؤرشف</option></select>'
     +'<select onchange="fAdm.mtype=this.value;rAdmin()"><option value="">كل الأنواع</option>'
       +'<option value="periodic">دورية</option><option value="emergency">طارئة</option></select>'
     +'<button class="btn cl" onclick="fAdm={q:\'\',branch:\'\',status:\'\',mtype:\'\'};rAdmin()">مسح</button></div>'
@@ -1761,7 +1773,7 @@ rMnt = function(){
     return mr+ur;
   }).join("");
   if(!filtered.length)rows='<tr><td colspan="8"><div class="empty"><div class="ei">🔍</div><div class="et">لا توجد نتائج</div></div></td></tr>';
-  var archRows=archSection(archived,archShowMnt,"archShowMnt=!archShowMnt;rMnt()",8);
+  var archRows=(fMnt&&fMnt.status==="archived")?"":archSection(archived,archShowMnt,"archShowMnt=!archShowMnt;rMnt()",8);
 
   document.getElementById("main").innerHTML=
     '<div class="ph"><div class="ph-left"><div class="pt">تنفيذ الصيانة</div><div class="ps">الطلبات الموافق عليها — اضغط على أي سطر للتفاصيل</div></div>'
@@ -2370,7 +2382,7 @@ function sItemsPickerCell(isEdit){
       +'<span style="font-size:12px;font-weight:600;color:var(--txt);flex:1">'+obj.item+'</span>'
       +'<span style="'+stylePer+'" onclick="sSetItemType('+ci+',\'periodic\')">\u{1F504} دوري</span>'
       +'<span style="'+styleEm+'" onclick="sSetItemType('+ci+',\'emergency\')">\u26A0\uFE0F طارئ</span>'
-      +'<button onclick="sRemoveItem('+ci+')" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;line-height:1;padding:0 3px">\u2715</button>'
+      +'<button data-ci="'+ci+'" onclick="sRemoveItem(+this.dataset.ci)" style="background:none;border:none;cursor:pointer;color:var(--txt3);font-size:16px;line-height:1;padding:0 3px">\u2715</button>'
       +'</div>';
   });
 
@@ -2386,7 +2398,7 @@ function sItemsPickerCell(isEdit){
     +'<option value="">\u2014 \u0627\u062E\u062A\u0631 \u0628\u0646\u062F\u0627\u064B \u0644\u0644\u0625\u0636\u0627\u0641\u0629 \u2014</option>'
     +optsHtml+'</select>'
     +'<div style="display:flex;gap:4px;margin-top:5px">'
-    +'<input id="'+inpId+'" placeholder="\u0623\u0648 \u0627\u0643\u062A\u0628 \u0628\u0646\u062F\u0627\u064B \u062C\u062F\u064A\u062F\u0627\u064B..." value="'+sOther+'" onchange="sOther=this.value" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--bl-br);border-radius:6px;direction:rtl;outline:none">'
+    +'<input id="'+inpId+'" placeholder="\u0623\u0648 \u0627\u0643\u062A\u0628 \u0628\u0646\u062F\u0627\u064B \u062C\u062F\u064A\u062F\u0627\u064B..." value="'+sOther+'" oninput="sOther=this.value" style="flex:1;padding:5px 8px;font-size:12px;border:1px solid var(--bl-br);border-radius:6px;direction:rtl;outline:none">'
     +'<button class="btn ok" style="padding:5px 10px;font-size:12px;white-space:nowrap" onclick="sAddOther2()">\u002B \u0625\u0636\u0627\u0641\u0629</button>'
     +'</div>'
     +'</td>';
@@ -2396,6 +2408,119 @@ function sPickItem(el){
   var v=el.value;
   if(v){sAddItem(v);el.value="";}
 }
+
+
+/* ══ SUPERVISOR FULL PAGE FORM ══ */
+var _origRSup_pg = rSup;
+rSup = function(){
+  if(sOpen){
+    _showSupForm(!!sEid);
+    return;
+  }
+  _origRSup_pg();
+};
+
+function _showSupForm(isEdit){
+  var drv = gdrv(sB,sD);
+  var title = isEdit ? "تعديل طلب الصيانة" : "طلب صيانة جديد";
+
+  var bOpts='<option value="">— اختر الفرع —</option>';
+  DB.branches.forEach(function(b){bOpts+='<option value="'+b+'"'+(sB===b?' selected':'')+'>'+b+'</option>';});
+
+  var dOpts='<option value="">— اختر السائق —</option>';
+  (sB?DB.drivers.filter(function(d){return d.branch===sB;}):DB.drivers).forEach(function(d){
+    dOpts+='<option value="'+d.name+'"'+(sD===d.name?' selected':'')+'>'+d.name+'</option>';
+  });
+
+  var carInfo=drv?'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:16px">'
+    +'<div><div style="font-size:11px;color:var(--txt3)">اللوحة</div><b>'+drv.plate+'</b></div>'
+    +'<div><div style="font-size:11px;color:var(--txt3)">السيارة</div><span style="font-size:13px">'+(drv.make||'')+' '+(drv.model||'')+'</span></div>'
+    +'<div><div style="font-size:11px;color:var(--txt3)">السنة</div><span style="font-size:13px">'+(drv.year||'—')+'</span></div>'
+    +'</div>':'';
+
+  var chips=sItems.map(function(obj,ci){
+    var isPer=obj.mtype==='periodic';
+    return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)">'
+      +'<span style="font-size:13px;font-weight:600;flex:1">'+obj.item+'</span>'
+      +'<span data-ci="'+ci+'" data-mt="periodic" onclick="sSetItemType(+this.dataset.ci,this.dataset.mt);rSup()" style="cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid '+(isPer?'var(--bl)':'#ddd')+';background:'+(isPer?'var(--bl-b)':'transparent')+';color:'+(isPer?'var(--bl)':'#aaa')+'">🔄 دوري</span>'
+      +'<span data-ci="'+ci+'" data-mt="emergency" onclick="sSetItemType(+this.dataset.ci,this.dataset.mt);rSup()" style="cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid '+(!isPer?'var(--rd)':'#ddd')+';background:'+(!isPer?'var(--rd-b)':'transparent')+';color:'+(!isPer?'var(--rd)':'#aaa')+'">⚠️ طارئ</span>'
+      +'<button data-ci="'+ci+'" onclick="sRemoveItem(+this.dataset.ci)" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:18px;line-height:1">✕</button>'
+      +'</div>';
+  }).join('');
+
+  var allItems=sGetAllItems();
+  var iOpts='<option value="">— اختر بنداً للإضافة —</option>';
+  allItems.forEach(function(i){
+    var already=sItems.find(function(x){return x.item===i;});
+    iOpts+='<option value="'+i+'"'+(already?' disabled':'')+'>'+i+'</option>';
+  });
+
+  var fileHtml=sF?
+    (sF._uploading
+      ?'<div style="padding:12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;color:#92400e;font-size:13px;margin-bottom:8px">⏳ جارٍ رفع الصورة...</div>'
+      :'<div style="padding:12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;color:#16a34a;font-size:13px;margin-bottom:8px">✅ '+sF.name+'</div>')
+    :'';
+
+  document.getElementById("main").innerHTML=
+    '<div style="max-width:680px;margin:0 auto;padding-bottom:40px">'
+    +'<div class="ph" style="margin-bottom:20px">'
+    +'<div class="ph-left"><div class="pt">'+title+'</div><div class="ps">أدخل بيانات طلب الصيانة</div></div>'
+    +'<button class="btn cl" onclick="sCl()">← رجوع</button>'
+    +'</div>'
+
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">بيانات السيارة</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:5px">الفرع <span style="color:var(--rd)">*</span></label>'
+    +'<select onchange="sSetB(this.value)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff">'+bOpts+'</select></div>'
+    +'<div><label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:5px">السائق <span style="color:var(--rd)">*</span></label>'
+    +'<select onchange="sSetD(this.value)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff"'+(sB?'':' disabled')+'>'+dOpts+'</select></div>'
+    +'</div>'
+    +carInfo
+    +'</div>'
+
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">بنود الصيانة <span style="color:var(--rd)">*</span></div>'
+    +chips
+    +'<select onchange="(function(v,el){if(v){sAddItem(v);el.value="";}}).call(this,this.value,this)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff;margin-bottom:10px">'+iOpts+'</select>'
+    +'<div style="display:flex;gap:8px">'
+    +'<input id="sup-new-item-inp" placeholder="أو اكتب بنداً جديداً غير موجود..." oninput="sOther=this.value" onkeydown="if(event.key==="Enter"){_supAddOther();}" style="flex:1;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none">'
+    +'<button class="btn ok" onclick="_supAddOther()" style="padding:9px 16px;font-size:13px;white-space:nowrap">+ إضافة</button>'
+    +'</div>'
+    +'</div>'
+
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">ملاحظات <span style="font-size:11px;color:var(--txt3);font-weight:400">(اختياري)</span></div>'
+    +'<textarea oninput="sN=this.value" rows="3" placeholder="أي ملاحظات إضافية..." style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box">'+sN+'</textarea>'
+    +'</div>'
+
+    +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">صورة الطلب <span style="color:var(--rd)">*</span></div>'
+    +fileHtml
+    +'<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;border:2px dashed '+(sF&&!sF._uploading?'var(--gr)':'var(--border)')+';border-radius:10px;cursor:pointer;background:#f8fafc;font-size:14px;color:var(--txt2);transition:all .2s">'
+    +'📷 '+(sF&&!sF._uploading?'تغيير الصورة':'اختر صورة أو PDF')+' '
+    +'<input type="file" accept="image/*,.pdf" style="display:none" onchange="sFPick(this.files[0],false)">'
+    +'</label>'
+    +'</div>'
+
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="sSaveN()" style="flex:1;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(22,163,74,.3)">✓ إرسال الطلب</button>'
+    +'<button onclick="sCl()" style="padding:14px 24px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit">إلغاء</button>'
+    +'</div>'
+    +'</div>';
+}
+
+function _supAddOther(){
+  var el=document.getElementById('sup-new-item-inp');
+  var v=el?el.value.trim():(sOther||'').trim();
+  if(!v){alert('اكتب اسم البند أولاً');return;}
+  sOther=v;
+  sAddOther2();
+  if(el)el.value='';
+  sOther='';
+}
+
+
 
 
 </script>
@@ -2442,5 +2567,4 @@ function sPickItem(el){
 </div>
 
 </body>
-</html
-    +\'<div class="rpt-section"><div class="rpt-title">🚗 السيارات الأكثر صيانةً</div>\'+barChart(byCar,"linear-gradient(90deg,#dc2626,#f87171)")+\'</div>\'>
+</html>
