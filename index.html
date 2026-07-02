@@ -359,7 +359,7 @@ document.addEventListener("DOMContentLoaded", function(){
           style="width:100%;padding:11px 14px;font-size:14px;background:#fff;border:1px solid #d1d5db;border-radius:9px;color:#1f2937;direction:rtl;outline:none;font-family:inherit"
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
-      <button id="lp-btn" onclick="doLoginStep1()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
+      <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
       <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026</div>
     </div>
   </div>
@@ -418,12 +418,14 @@ document.addEventListener("DOMContentLoaded", function(){
 
 <script>
 /* ══ USERS (managed by sysadmin) ══ */
+var DEFAULT_USERS=null;
 var USERS=[
   {id:1,username:"ahmed",password:"1234",name:"أحمد السعيد",role:"supervisor",active:true},
   {id:2,username:"sara",password:"1234",name:"سارة المنصور",role:"admin",active:true},
   {id:3,username:"khalid",password:"1234",name:"خالد الرشيد",role:"maintenance",active:true},
   {id:4,username:"admin",password:"admin123",name:"مدير النظام",role:"sysadmin",active:true},
 ];
+DEFAULT_USERS=USERS.slice();
 var userIdCounter=4;
 
 /* ══ DB ══ */
@@ -1927,21 +1929,34 @@ function saDoChgPw(id){
 
 /* ── TILE LOGIN STEP 1+2 ── */
 function doLoginStep1(){
-  /* Login works with local USERS immediately; Firebase syncs in background */
-  var u=document.getElementById("lu").value.trim();
-  var p=document.getElementById("lp-pw").value;
-  var user=USERS.find(function(x){return x.username===u&&x.password===p&&x.active;});
-  var err=document.getElementById("l-err");
-  if(!user){err.style.display="block";return;}
-  err.style.display="none";
-  lpUser=user;
-  document.getElementById("lp-step1").style.display="none";
-  var s2=document.getElementById("lp-step2");
-  s2.style.display="flex";s2.style.flexDirection="column";
-  s2.style.minHeight="100vh";
-  var wel=document.getElementById("lp-welcome");
-  if(wel)wel.textContent="مرحباً، "+user.name;
-  buildTiles(user);
+  try{
+    var u=(document.getElementById("lu").value||"").trim();
+    var p=document.getElementById("lp-pw").value||"";
+    if(!u){
+      var e=document.getElementById("l-err");
+      if(e){e.style.display="block";e.textContent="يرجى إدخال اسم المستخدم";}
+      return;
+    }
+    var searchList=(USERS&&USERS.length>0)?USERS:(DEFAULT_USERS||[]);
+    var user=searchList.find(function(x){return x.username===u&&x.password===p&&x.active;});
+    var err=document.getElementById("l-err");
+    if(!user){
+      if(err){err.style.display="block";err.textContent="اسم المستخدم أو كلمة المرور غير صحيحة";}
+      return;
+    }
+    if(err)err.style.display="none";
+    lpUser=user;
+    var s1=document.getElementById("lp-step1");
+    var s2=document.getElementById("lp-step2");
+    if(s1)s1.style.display="none";
+    if(s2){s2.style.display="flex";s2.style.flexDirection="column";s2.style.minHeight="100vh";}
+    var wel=document.getElementById("lp-welcome");
+    if(wel)wel.textContent="مرحباً، "+user.name;
+    try{buildTiles(user);}catch(e2){console.error("buildTiles error:",e2);}
+  }catch(e){
+    console.error("doLoginStep1 error:",e);
+    alert("خطأ في تسجيل الدخول: "+e.message);
+  }
 }
 
 function buildTiles(user){
@@ -1977,17 +1992,21 @@ function buildTiles(user){
 }
 
 function enterApp(page){
-  if(!lpUser)return;
-  CR=lpUser;
-  document.getElementById("lp").style.display="none";
-  document.getElementById("app").style.display="flex";
-  var rb=document.getElementById("tbadge");
-  rb.className="rbadge "+CR.role;rb.textContent=roles[CR.role].label;
-  document.getElementById("tname").textContent=CR.name;
-  document.getElementById("tav").textContent=CR.name.charAt(0);
-  updSB();
-  var al=roles[CR.role].pages;
-  gp(al.indexOf(page)>=0?page:"dashboard");
+  try{
+    if(!lpUser)return;
+    CR=lpUser;
+    var lp=document.getElementById("lp");
+    var app=document.getElementById("app");
+    if(lp)lp.style.display="none";
+    if(app)app.style.display="flex";
+    var rb=document.getElementById("tbadge");
+    if(rb){rb.className="rbadge "+(CR.role||"");rb.textContent=(roles[CR.role]?roles[CR.role].label:CR.role);}
+    var tn=document.getElementById("tname");if(tn)tn.textContent=CR.name;
+    var av=document.getElementById("tav");if(av)av.textContent=(CR.name||"م").charAt(0);
+    try{updSB();}catch(e2){}
+    var al=(roles[CR.role]&&roles[CR.role].pages)||["dashboard"];
+    try{gp(al.indexOf(page)>=0?page:"dashboard");}catch(e3){console.error("gp error:",e3);}
+  }catch(e){console.error("enterApp error:",e);}
 }
 
 function logoutFromTiles(){
