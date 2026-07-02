@@ -1701,19 +1701,7 @@ requests.forEach(function(r){
 /* ── PATCH action functions to record timestamps ── */
 /* OLD sSaveN removed — replaced by new version below */
 
-var _origSSaveE = sSaveE;
-sSaveE = function(){
-  if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول");return;}
-  var d=gdrv(sB,sD);
-  var ts=nowTs();
-  requests=requests.map(function(r){
-    return r.id===sEid?Object.assign({},r,{branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",
-      mtype:sMT,mitem:sMI,notes:sN,file:sF?sF.name:r.file,fileUrl:sFUrl||r.fileUrl,
-      status:"pending",rejectReason:undefined,date:ts.slice(0,10),ts_submit:ts,ts_reject:null,ts_approve:null}):r;
-  });
-  sCl();
-  fbSaveAll();
-};
+/* OLD sSaveE removed */
 
 var _origAApprove = aApprove;
 aApprove = function(id){
@@ -2026,6 +2014,100 @@ function sItemsCell(isEdit){
 /* patch sOpenRow / sCl / sSetMT to reset sItems */
 var _origSOpenRow=sOpenRow;
 sOpenRow=function(){sOpen=true;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFUrl=null;sEid=null;sItems=[];sOther="";rSup();};
+
+/* ── Supervisor form helpers — update DOM without full redraw ── */
+function _supSetB(v){
+  sB=v; sD="";
+  /* Update driver dropdown */
+  var dSel=document.getElementById("sup-drv-sel");
+  if(!dSel){rSup();return;}
+  var dOpts='<option value="">— اختر السائق —</option>';
+  DB.drivers.filter(function(d){return d.branch===sB;}).forEach(function(d){
+    dOpts+='<option value="'+d.name+'">'+d.name+'</option>';
+  });
+  dSel.innerHTML=dOpts;
+  dSel.disabled=false;
+  /* Clear car info */
+  var ci=document.getElementById("sup-car-info");
+  if(ci)ci.innerHTML='';
+}
+
+function _supSetD(v){
+  sD=v;
+  /* Update car info */
+  var drv=gdrv(sB,sD);
+  var ci=document.getElementById("sup-car-info");
+  if(ci){
+    ci.innerHTML=drv
+      ?'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-top:8px">'
+        +'<div><div style="font-size:11px;color:var(--txt3)">اللوحة</div><b style="font-size:14px">'+drv.plate+'</b></div>'
+        +'<div><div style="font-size:11px;color:var(--txt3)">السيارة</div><span style="font-size:13px">'+(drv.make||'')+' '+(drv.model||'')+'</span></div>'
+        +'<div><div style="font-size:11px;color:var(--txt3)">السنة</div><span style="font-size:13px">'+(drv.year||'—')+'</span></div>'
+        +'</div>'
+      :'';
+  }
+}
+
+function _supAddItem(v){
+  if(!v)return;
+  var exists=sItems.find(function(x){return x.item===v;});
+  if(!exists){sItems.push({item:v,mtype:"periodic"});}
+  /* Update chips area */
+  _supRenderChips();
+}
+
+function _supSetItemType(ci,mt){
+  if(sItems[ci])sItems[ci].mtype=mt;
+  _supRenderChips();
+}
+
+function _supRemoveItem(ci){
+  sItems.splice(ci,1);
+  _supRenderChips();
+}
+
+function _supRenderChips(){
+  var el=document.getElementById("sup-chips");
+  if(!el)return;
+  el.innerHTML=sItems.map(function(obj,ci){
+    var isPer=obj.mtype==="periodic";
+    return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;margin-bottom:8px">'
+      +'<span style="font-size:13px;font-weight:600;flex:1">'+obj.item+'</span>'
+      +'<span data-ci="'+ci+'" data-mt="periodic" onclick="_supSetItemType(+this.dataset.ci,this.dataset.mt)" style="cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid '+(isPer?"var(--bl)":"#ddd")+';background:'+(isPer?"var(--bl-b)":"transparent")+';color:'+(isPer?"var(--bl)":"#aaa")+'">🔄 دوري</span>'
+      +'<span data-ci="'+ci+'" data-mt="emergency" onclick="_supSetItemType(+this.dataset.ci,this.dataset.mt)" style="cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid '+(!isPer?"var(--rd)":"#ddd")+';background:'+(!isPer?"var(--rd-b)":"transparent")+';color:'+(!isPer?"var(--rd)":"#aaa")+'">⚠️ طارئ</span>'
+      +'<button data-ci="'+ci+'" onclick="_supRemoveItem(+this.dataset.ci)" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:18px;line-height:1">×</button>'
+      +'</div>';
+  }).join('');
+  /* Update item select disabled options */
+  var sel=document.getElementById("sup-item-sel");
+  if(sel){
+    Array.prototype.forEach.call(sel.options,function(opt){
+      var taken=sItems.find(function(x){return x.item===opt.value;});
+      opt.disabled=!!taken;
+      opt.style.color=taken?"#bbb":"";
+    });
+  }
+}
+
+function _supAddOtherItem(){
+  var el=document.getElementById("sup-other-inp");
+  var v=el?el.value.trim():"";
+  if(!v){alert("اكتب اسم البند أولاً");return;}
+  if((DB.items.periodic||[]).indexOf(v)<0) DB.items.periodic.unshift(v);
+  sItems.push({item:v,mtype:"periodic"});
+  if(el)el.value="";
+  sOther="";
+  fbSaveAll();
+  _supRenderChips();
+  /* Update item select */
+  var sel=document.getElementById("sup-item-sel");
+  if(sel){
+    var opt=document.createElement("option");
+    opt.value=v; opt.text=v;
+    sel.insertBefore(opt,sel.options[1]);
+  }
+}
+
 var _origSCl=sCl;
 sCl=function(){sOpen=false;sEid=null;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFUrl=null;sItems=[];sOther="";rSup();};
 var _origSSetMT=sSetMT;
@@ -2068,8 +2150,8 @@ sSaveN=function(){
 };
 var _origSSaveE2=_origSSaveE||sSaveE;
 sSaveE=function(){
-  if(!sB||!sD||!sMT){alert("يرجى تعبئة جميع الحقول");return;}
-  if(!sItems.length){alert("يرجى اختيار بند صيانة واحد على الأقل");return;}
+  if(!sB||!sD){alert("يرجى اختيار الفرع والسائق");return;}
+  if(!sItems||!sItems.length){alert("يرجى اختيار بند صيانة واحد على الأقل");return;}
   var d=gdrv(sB,sD);var ts=nowTs();
   requests=requests.map(function(r){
     return r.id===sEid?Object.assign({},r,{branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",
@@ -2575,45 +2657,37 @@ rSup = function(){
 };
 
 function _showSupForm(isEdit){
-  var drv = gdrv(sB,sD);
-  var title = isEdit ? "تعديل طلب الصيانة" : "طلب صيانة جديد";
+  var drv=gdrv(sB,sD);
+  var title=isEdit?"تعديل طلب الصيانة":"طلب صيانة جديد";
 
+  /* Branch options */
   var bOpts='<option value="">— اختر الفرع —</option>';
-  DB.branches.forEach(function(b){bOpts+='<option value="'+b+'"'+(sB===b?' selected':'')+'>'+b+'</option>';});
+  DB.branches.forEach(function(b){
+    bOpts+='<option value="'+b+'"'+(sB===b?' selected':'')+'>'+b+'</option>';
+  });
 
+  /* Driver options */
   var dOpts='<option value="">— اختر السائق —</option>';
   (sB?DB.drivers.filter(function(d){return d.branch===sB;}):DB.drivers).forEach(function(d){
     dOpts+='<option value="'+d.name+'"'+(sD===d.name?' selected':'')+'>'+d.name+'</option>';
   });
 
-  var carInfo=drv?'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-bottom:16px">'
-    +'<div><div style="font-size:11px;color:var(--txt3)">اللوحة</div><b>'+drv.plate+'</b></div>'
-    +'<div><div style="font-size:11px;color:var(--txt3)">السيارة</div><span style="font-size:13px">'+(drv.make||'')+' '+(drv.model||'')+'</span></div>'
-    +'<div><div style="font-size:11px;color:var(--txt3)">السنة</div><span style="font-size:13px">'+(drv.year||'—')+'</span></div>'
-    +'</div>':'';
+  /* Car info */
+  var carHtml=drv
+    ?'<div id="sup-car-info" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px;margin-top:8px">'
+      +'<div><div style="font-size:11px;color:var(--txt3)">اللوحة</div><b style="font-size:14px">'+drv.plate+'</b></div>'
+      +'<div><div style="font-size:11px;color:var(--txt3)">السيارة</div><span style="font-size:13px">'+(drv.make||'')+' '+(drv.model||'')+'</span></div>'
+      +'<div><div style="font-size:11px;color:var(--txt3)">السنة</div><span style="font-size:13px">'+(drv.year||'—')+'</span></div>'
+      +'</div>'
+    :'<div id="sup-car-info"></div>';
 
-  var chips=sItems.map(function(obj,ci){
-    var isPer=obj.mtype==='periodic';
-    return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:8px 12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.05)">'
-      +'<span style="font-size:13px;font-weight:600;flex:1">'+obj.item+'</span>'
-      +'<span data-ci="'+ci+'" data-mt="periodic" onclick="sSetItemType(+this.dataset.ci,this.dataset.mt);rSup()" style="cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid '+(isPer?'var(--bl)':'#ddd')+';background:'+(isPer?'var(--bl-b)':'transparent')+';color:'+(isPer?'var(--bl)':'#aaa')+'">🔄 دوري</span>'
-      +'<span data-ci="'+ci+'" data-mt="emergency" onclick="sSetItemType(+this.dataset.ci,this.dataset.mt);rSup()" style="cursor:pointer;font-size:12px;padding:3px 10px;border-radius:20px;border:1.5px solid '+(!isPer?'var(--rd)':'#ddd')+';background:'+(!isPer?'var(--rd-b)':'transparent')+';color:'+(!isPer?'var(--rd)':'#aaa')+'">⚠️ طارئ</span>'
-      +'<button data-ci="'+ci+'" onclick="sRemoveItem(+this.dataset.ci)" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:18px;line-height:1">✕</button>'
-      +'</div>';
-  }).join('');
-
+  /* Items */
   var allItems=sGetAllItems();
   var iOpts='<option value="">— اختر بنداً للإضافة —</option>';
   allItems.forEach(function(i){
-    var already=sItems.find(function(x){return x.item===i;});
-    iOpts+='<option value="'+i+'"'+(already?' disabled':'')+'>'+i+'</option>';
+    var taken=sItems.find(function(x){return x.item===i;});
+    iOpts+='<option value="'+i+'"'+(taken?' disabled style="color:#bbb"':'')+'>'+i+'</option>';
   });
-
-  var fileHtml=sF?
-    (sF._uploading
-      ?'<div style="padding:12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;color:#92400e;font-size:13px;margin-bottom:8px">⏳ جارٍ رفع الصورة...</div>'
-      :'<div style="padding:12px;background:#dcfce7;border:1px solid #86efac;border-radius:8px;color:#16a34a;font-size:13px;margin-bottom:8px">✅ '+sF.name+'</div>')
-    :'';
 
   document.getElementById("main").innerHTML=
     '<div style="max-width:680px;margin:0 auto;padding-bottom:40px">'
@@ -2622,48 +2696,56 @@ function _showSupForm(isEdit){
     +'<button class="btn cl" onclick="sCl()">← رجوع</button>'
     +'</div>'
 
+    /* Branch & Driver */
     +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:14px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">بيانات السيارة</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">'
     +'<div><label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:5px">الفرع <span style="color:var(--rd)">*</span></label>'
-    +'<select onchange="sSetB(this.value)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff">'+bOpts+'</select></div>'
+    +'<select onchange="_supSetB(this.value)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff">'+bOpts+'</select></div>'
     +'<div><label style="font-size:12px;font-weight:600;color:var(--txt2);display:block;margin-bottom:5px">السائق <span style="color:var(--rd)">*</span></label>'
-    +'<select onchange="sSetD(this.value)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff"'+(sB?'':' disabled')+'>'+dOpts+'</select></div>'
+    +'<select id="sup-drv-sel" onchange="_supSetD(this.value)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff"'+(sB?'':' disabled')+'>'+dOpts+'</select></div>'
     +'</div>'
-    +carInfo
+    +carHtml
     +'</div>'
 
+    /* Items */
     +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:14px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">بنود الصيانة <span style="color:var(--rd)">*</span></div>'
-    +chips
-    +'<select onchange="(function(v,el){if(v){sAddItem(v);el.value="";}}).call(this,this.value,this)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff;margin-bottom:10px">'+iOpts+'</select>'
+    +'<div id="sup-chips"></div>'
+    +'<select id="sup-item-sel" onchange="(function(v,el){if(v){_supAddItem(v);el.value="";}}).call(this,this.value,this)" style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;background:#fff;margin-bottom:10px">'+iOpts+'</select>'
     +'<div style="display:flex;gap:8px">'
-    +'<input id="sup-new-item-inp" placeholder="أو اكتب بنداً جديداً غير موجود..." oninput="sOther=this.value" onkeydown="if(event.key==="Enter"){_supAddOther();}" style="flex:1;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none">'
-    +'<button class="btn ok" onclick="_supAddOther()" style="padding:9px 16px;font-size:13px;white-space:nowrap">+ إضافة</button>'
+    +'<input id="sup-other-inp" placeholder="أو اكتب بنداً جديداً..." oninput="sOther=this.value" onkeydown="if(event.key==\"Enter\"){_supAddOtherItem();}" style="flex:1;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none">'
+    +'<button class="btn ok" onclick="_supAddOtherItem()" style="padding:9px 16px;font-size:13px;white-space:nowrap">+ إضافة</button>'
     +'</div>'
     +'</div>'
 
+    /* Notes */
     +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:14px">'
-    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">ملاحظات <span style="font-size:11px;color:var(--txt3);font-weight:400">(اختياري)</span></div>'
-    +'<textarea oninput="sN=this.value" rows="3" placeholder="أي ملاحظات إضافية..." style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box">'+sN+'</textarea>'
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:8px">ملاحظات <span style="font-size:11px;color:var(--txt3);font-weight:400">(اختياري)</span></div>'
+    +'<textarea id="sup-notes-ta" oninput="sN=this.value" rows="3" placeholder="أي ملاحظات..." style="width:100%;padding:9px 12px;font-size:13px;border:1.5px solid var(--border);border-radius:8px;direction:rtl;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box">'+sN+'</textarea>'
     +'</div>'
 
+    /* Photo */
     +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">'
-    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">صورة الطلب <span style="color:var(--rd)">*</span></div>'
-    +fileHtml
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:8px">صورة الطلب <span style="color:var(--rd)">*</span></div>'
     +'<div id="sup-file-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:8px;font-weight:600"></div>'
-    +'<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;border:2px dashed '+(sF&&!sF._uploading?'var(--gr)':'var(--border)')+';border-radius:10px;cursor:pointer;background:#f8fafc;font-size:14px;color:var(--txt2);transition:all .2s">'
-    +'📷 '+(sF&&!sF._uploading?'تغيير الصورة':'اختر صورة أو PDF')+' '
+    +'<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:#f8fafc;font-size:14px;color:var(--txt2)">'
+    +'📷 اختر صورة أو PDF'
     +'<input type="file" accept="image/*,.pdf" style="display:none" onchange="sFPick(this.files[0],false)">'
     +'</label>'
     +'</div>'
 
+    /* Submit */
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="sSaveN()" style="flex:1;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 14px rgba(22,163,74,.3)">✓ إرسال الطلب</button>'
+    +'<button onclick="sSaveN()" style="flex:1;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">✓ إرسال الطلب</button>'
     +'<button onclick="sCl()" style="padding:14px 24px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit">إلغاء</button>'
     +'</div>'
     +'</div>';
+
+  /* Render chips after DOM is ready */
+  setTimeout(function(){ _supRenderChips(); }, 0);
 }
+
 
 function _supAddOther(){
   var el=document.getElementById('sup-new-item-inp');
