@@ -466,12 +466,7 @@ function fbApplyRemote(data){
   fbSyncing = true;
   if(data.USERS){
     USERS = data.USERS;
-    var nameChanged=false;
-    USERS=USERS.map(function(u){
-      if(u.role==="sysadmin"&&u.name!=="مدير النظام"){nameChanged=true;return Object.assign({},u,{name:"مدير النظام"});}
-      return u;
-    });
-    if(nameChanged){fbSyncing=false;fbSaveAll();fbSyncing=true;}
+    // name migration removed — do not auto-write on load
   }
   if(data.DB) DB = data.DB;
   if(data.requests) requests = data.requests;
@@ -488,12 +483,12 @@ window.addEventListener("fb-ready", function(){
   var rootRef = window.FB.ref(window.FB.db, "/");
   window.FB.get(rootRef).then(function(snap){
     if(!snap.exists()){
-      // first run ever — seed Firebase with our local default data
+      // truly empty — seed only if no real data exists at all
       fbSyncing = true;
       window.FB.set(rootRef, { USERS: USERS, DB: DB, requests: requests, seqCounter: seqCounter })
         .then(function(){ fbSyncing = false; });
     }
-    // attach realtime listener AFTER initial seed check
+    // attach realtime listener — NEVER overwrite existing Firebase data
     window.FB.onValue(rootRef, function(snap2){
       var data = snap2.val();
       if(!data) return;
