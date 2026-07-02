@@ -493,7 +493,7 @@ window.addEventListener("fb-ready", function(){
         (raw.USERS && (Array.isArray(raw.USERS)?raw.USERS.length:Object.keys(raw.USERS||{}).length) > 0) ||
         (raw.requests && Object.keys(raw.requests||{}).length > 0) ||
         (raw.seqCounter && raw.seqCounter > 0) ||
-        (raw.DB && raw.DB.drivers && (Array.isArray(raw.DB.drivers)?raw.DB.drivers.length:Object.keys(raw.DB.drivers||{}).length) > 0)
+        (raw.DB && raw.DB.branches && (Array.isArray(raw.DB.branches)?raw.DB.branches.length:Object.keys(raw.DB.branches||{}).length) > 0)
       );
       if(!hasRealData){
         console.log("Firebase empty — first time setup");
@@ -1380,7 +1380,7 @@ function rReports(){
   var byMtype=countBy(list,"mtype").map(function(d){return{label:d.label==="periodic"?"دورية":"طارئة",count:d.count};});
   var byItem=countBy(list,"mitem");
   var byDriver=countBy(list,"driver");
-  var byCar=countBy(list,"car");
+  var byCar=countBy(list,"plate").slice(0,8).map(function(d){var r=list.find(function(x){return x.plate===d.label;});return{label:d.label+(r&&r.car?" — "+r.car:""),count:d.count};});
 
   /* car status table */
   var cars={};
@@ -1476,6 +1476,7 @@ rDash=function(){
   var byBranch=countBy(requests,"branch").slice(0,5);
   var byItem=countBy(requests,"mitem").slice(0,5);
   var byMtype=countBy(requests,"mtype").map(function(d){return{label:d.label==="periodic"?"دورية":"طارئة",count:d.count};});
+  var byCarDash=countBy(requests,"plate").slice(0,7).map(function(d){var r=requests.find(function(x){return x.plate===d.label;});return{label:d.label+(r&&r.car?" ("+r.car+")":""),count:d.count};});
 
   var recent=requests.filter(function(r){return !r.archived;}).slice().reverse().slice(0,8).map(function(r){
     return '<tr><td><span class="seq">'+r.seq+'</span></td>'
@@ -1506,7 +1507,9 @@ rDash=function(){
       +'<div class="rpt-section" style="margin-bottom:0"><div class="rpt-title" style="font-size:13px;margin-bottom:12px">🔧 أكثر القطع استهلاكاً</div>'+barChart(byItem,"linear-gradient(90deg,#7c3aed,#a78bfa)")+'</div>'
       +'<div class="rpt-section" style="margin-bottom:0"><div class="rpt-title" style="font-size:13px;margin-bottom:12px">⚙️ نوع الصيانة</div>'+barChart(byMtype,"linear-gradient(90deg,#16a34a,#4ade80)")+'</div>'
       +'</div>'
+    +'<div class="rpt-section" style="margin-bottom:16px"><div class="rpt-title" style="font-size:13px;margin-bottom:12px">🚗 السيارات الأكثر صيانةً</div>'+barChart(byCarDash,"linear-gradient(90deg,#dc2626,#f87171)")+'<\/div>'
     :"")
+      
     +'<div class="tc"><div class="tc-hdr"><span class="tc-title">آخر الطلبات النشطة</span></div>'
     +'<div class="tbl-wrap"><table><thead><tr><th>رقم الطلب</th><th>السائق</th><th>اللوحة</th><th>نوع الصيانة</th><th>البند</th><th>الصورة</th><th>الحالة</th><th>التاريخ</th></tr></thead>'
     +'<tbody>'+recent+'</tbody></table></div></div>';
@@ -1883,15 +1886,26 @@ sEditOpen=function(id){
 /* patch sSaveN/sSaveE to use sItems */
 var _origSSaveN2=_origSSaveN||sSaveN;
 sSaveN=function(){
-  if(!sB||!sD||!sMT){alert("يرجى تعبئة جميع الحقول المطلوبة");return;}
-  if(!sItems.length){alert("يرجى اختيار بند صيانة واحد على الأقل");return;}
+  if(!sB||!sD){alert("يرجى اختيار الفرع والسائق");return;}
+  if(!sItems||!sItems.length){alert("يرجى اختيار بند صيانة واحد على الأقل");return;}
   if(!sF){alert("يرجى إرفاق صورة الطلب");return;}
   if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
   if(!sFUrl){alert("لم تكتمل عملية رفع الصورة، يرجى إعادة اختيار الصورة");return;}
+  /* اشتق نوع الصيانة من البنود */
+  var hasEmergency=sItems.some(function(x){return (x.mtype||x)==="emergency"||(x&&x.mtype==="emergency");});
+  var derivedMT=hasEmergency?"emergency":"periodic";
+  var itemsLabel=sItems.map(function(x){
+    var name=x.item||x;
+    var type=x.mtype||"periodic";
+    return sItems.length>1?name+" ("+(type==="emergency"?"طارئ":"دوري")+")":name;
+  }).join(" + ");
   var d=gdrv(sB,sD);var ts=nowTs();
   requests.unshift({seq:nextSeq(),id:Date.now(),branch:sB,driver:sD,
-    car:d?d.car:"",plate:d?d.plate:"",mtype:sMT,
-    mitem:sItems.join(" + "),mItems:sItems.slice(),
+    car:d?d.car:"",plate:d?d.plate:"",
+    mtype:derivedMT,
+    mitem:itemsLabel,
+    mItems:sItems.map(function(x){return x.item||x;}),
+    mItemsTyped:sItems.slice(),
     notes:sN,file:sF.name,fileUrl:sFUrl,status:"pending",
     date:ts.slice(0,10),ts_submit:ts,archived:false,
     submittedBy:CR?CR.name:""});
@@ -2439,4 +2453,5 @@ function sPickItem(el){
 </div>
 
 </body>
-</html>
+</html
+    +\'<div class="rpt-section"><div class="rpt-title">🚗 السيارات الأكثر صيانةً</div>\'+barChart(byCar,"linear-gradient(90deg,#dc2626,#f87171)")+\'</div>\'>
