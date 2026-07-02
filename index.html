@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.001</div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -466,51 +466,64 @@ function fbSaveAll(){
 }
 
 function fbApplyRemote(data){
-  /* قراءة كل شيء من Firebase — هذه الدالة لا تكتب أبداً */
+  /* قراءة كاملة من Firebase — لا تكتب أبداً */
   if(fbSyncing) return;
   fbSyncing = true;
   try{
-    /* USERS */
+    /* ── USERS ── */
     if(data.USERS){
-      var u = Array.isArray(data.USERS) ? data.USERS : Object.values(data.USERS);
-      if(u.length > 0) USERS = u;
-      /* تحديث بيانات المستخدم الحالي من Firebase */
-      if(CR){
-        var fresh = USERS.find(function(x){return x.id===CR.id;});
-        if(fresh){ CR=fresh; lpUser=fresh; }
+      var u = Array.isArray(data.USERS) ? data.USERS : Object.values(data.USERS||{});
+      if(u.length > 0){
+        USERS = u;
+        if(CR){
+          var fresh=USERS.find(function(x){return x.id===CR.id||x.username===CR.username;});
+          if(fresh){CR=Object.assign({},CR,fresh);lpUser=CR;}
+        }
       }
     }
-    /* DB */
+    /* ── DB ── */
     if(data.DB){
-      if(data.DB.branches && data.DB.branches.length > 0) DB.branches = data.DB.branches;
-      if(data.DB.drivers !== undefined){
-        DB.drivers = Array.isArray(data.DB.drivers)
-          ? data.DB.drivers
-          : Object.values(data.DB.drivers||{});
+      if(data.DB.branches){
+        DB.branches = Array.isArray(data.DB.branches)
+          ? data.DB.branches : Object.values(data.DB.branches);
       }
-      if(data.DB.items) DB.items = data.DB.items;
+      if(data.DB.drivers!==undefined){
+        DB.drivers = Array.isArray(data.DB.drivers)
+          ? data.DB.drivers : Object.values(data.DB.drivers||{});
+      }
+      if(data.DB.items){
+        DB.items = data.DB.items;
+        if(Array.isArray(DB.items.periodic)===false && DB.items.periodic)
+          DB.items.periodic = Object.values(DB.items.periodic);
+        if(Array.isArray(DB.items.emergency)===false && DB.items.emergency)
+          DB.items.emergency = Object.values(DB.items.emergency);
+      }
     }
-    /* requests — الأهم: تحويل من object إلى array مع الحفاظ على كل الحقول */
-    if(data.requests !== undefined && data.requests !== null){
-      var rawReqs = Array.isArray(data.requests)
-        ? data.requests
-        : Object.values(data.requests);
-      /* رتّب بالتاريخ (الأحدث أولاً) */
-      requests = rawReqs.sort(function(a,b){
-        return (b.id||0) - (a.id||0);
-      });
+    /* ── requests — تحويل دائم من Firebase object → array ── */
+    if(data.requests!==undefined && data.requests!==null){
+      var rawReqs;
+      if(Array.isArray(data.requests)){
+        rawReqs = data.requests;
+      } else if(typeof data.requests==="object"){
+        rawReqs = Object.values(data.requests);
+      } else {
+        rawReqs = [];
+      }
+      /* احتفظ بكل الحقول وافلتر العناصر الفارغة */
+      rawReqs = rawReqs.filter(function(r){return r && r.id;});
+      /* رتّب الأحدث أولاً */
+      requests = rawReqs.sort(function(a,b){ return (b.id||0)-(a.id||0); });
     }
-    /* seqCounter */
-    if(typeof data.seqCounter === "number" && data.seqCounter >= 0){
-      seqCounter = data.seqCounter;
+    /* ── seqCounter ── */
+    if(typeof data.seqCounter==="number"){
+      seqCounter = Math.max(seqCounter, data.seqCounter);
     }
   }catch(e){
     console.error("fbApplyRemote error:", e);
   }
   fbSyncing = false;
-  /* أعد رسم الشاشة الحالية */
   if(CR && CP){
-    try{ gp(CP); }catch(e){ console.error("re-render error:", e); }
+    try{ gp(CP); }catch(e){ console.error("gp error:", e); }
   }
 }
 
@@ -550,12 +563,14 @@ window.addEventListener("fb-ready", function(){
 
 /* check & auto-archive when mntStatus set */
 function checkArchive(id){
+  var nid=+id;
   requests=requests.map(function(r){
-    if(r.id!==id)return r;
+    if(r.id!==nid&&r.id!=id)return r;
     if(r.status==="approved"&&(r.mntStatus==="done"||r.mntStatus==="undone"))
       return Object.assign({},r,{archived:true});
     return r;
-  });;fbSaveAll();
+  });
+  fbSaveAll();
 }
 
 var roles={
@@ -647,12 +662,18 @@ function archSection(list,show,toggleFn,colspan){
   return hdr+rows;
 }
 function buildArchRow(r){
-  return '<tr class="arch-row">'
+  var mntBadge = r.mntStatus==="done"
+    ? '<span class="badge done">✓ تمت</span>'
+    : r.mntStatus==="undone"
+    ? '<span class="badge undone">✗ لم تتم</span>'
+    : '<span class="badge archived">مؤرشف</span>';
+  return '<tr class="arch-row" onclick="openModal('+r.id+')" style="cursor:pointer" title="انقر للتفاصيل">'
     +'<td><span class="seq arch">'+r.seq+'</span></td>'
-    +'<td><div class="dcell"><span class="dn" style="opacity:.7">'+r.driver+'</span><span class="dm">'+r.branch+'</span></div></td>'
-    +'<td><span style="font-size:12px;opacity:.7">'+r.plate+'</span><br><span style="font-size:11px;color:var(--txt3)">'+r.car+'</span></td>'
+    +'<td><div class="dcell"><span class="dn">'+r.driver+'</span><span class="dm">'+r.branch+'</span></div></td>'
+    +'<td><span style="font-size:12px">'+r.plate+'</span><br><span style="font-size:11px;color:var(--txt3)">'+r.car+'</span></td>'
     +'<td><span class="badge '+r.mtype+'">'+(r.mtype==="periodic"?"🔄 دورية":"⚠️ طارئة")+'</span></td>'
-    +'<td><span style="font-size:12px;opacity:.7">'+r.mitem+'</span></td>'
+    +'<td style="max-width:180px"><span style="font-size:12px">'+r.mitem+'</span></td>'
+    +'<td>'+mntBadge+'</td>'
     +'<td>'+imgBtn(r)+'</td>'
     +'<td><span class="badge '+(r.mntStatus||"approved")+'">'+(r.mntStatus==="done"?"✓ تمت":r.mntStatus==="undone"?"✗ لم تتم":"موافق عليه")+'</span></td>'
     +'<td><span style="font-size:12px;color:var(--txt3)">'+r.date+'</span></td>'
@@ -705,7 +726,7 @@ function applyFSup(list){
 }
 function buildArchRowSup(r){
   var d=gdrv(r.branch,r.driver);
-  return '<tr class="arch-row">'
+  return '<tr class="arch-row" onclick="openModal('+r.id+')" style="cursor:pointer" title="انقر للتفاصيل">'
     +'<td><span class="seq arch">'+r.seq+'</span></td>'
     +'<td><div class="dcell"><span class="dn" style="opacity:.7">'+r.driver+'</span><span class="dm">'+r.branch+'</span></div></td>'
     +'<td><span style="font-size:12px;opacity:.7">'+r.plate+'</span></td>'
@@ -844,16 +865,35 @@ function sSetMT(v){sMT=v;sMI="";rSup();}
 var R2_WORKER="https://fleet-images-api.ashraf-m0087.workers.dev";
 function sFPick(f,isEdit){
   if(!f)return;
-  sF=f;sF._uploading=true;sF._uploadDone=false;sFUrl=null;rSup();
+  sF=f;sF._uploading=true;sF._uploadDone=false;sFUrl=null;
+  /* تحديث مؤشر الرفع */
+  _supUpdateFileUI("⏳ جارٍ رفع الصورة...", "#fef3c7", "#92400e");
   var fd=new FormData();fd.append("file",f);
   fetch(R2_WORKER+"/upload",{method:"POST",body:fd})
     .then(function(r){return r.json();})
     .then(function(data){
-      if(data.url){sFUrl=data.url;sF._uploading=false;sF._uploadDone=true;}
-      else{alert("فشل رفع الصورة");sF=null;sFUrl=null;}
-      rSup();
+      if(data.url){
+        sFUrl=data.url;
+        sF._uploading=false;
+        sF._uploadDone=true;
+        _supUpdateFileUI("✅ تم رفع الصورة: "+f.name, "#dcfce7", "#15803d");
+      } else {
+        alert("فشل رفع الصورة");
+        sF=null;sFUrl=null;
+        _supUpdateFileUI("❌ فشل الرفع — اختر الصورة مجدداً", "#fee2e2", "#dc2626");
+      }
     })
-    .catch(function(e){alert("فشل الاتصال بخادم الصور: "+e.message);sF=null;sFUrl=null;rSup();});
+    .catch(function(e){
+      alert("فشل الاتصال بخادم الصور: "+e.message);
+      sF=null;sFUrl=null;
+      _supUpdateFileUI("❌ فشل الاتصال", "#fee2e2", "#dc2626");
+    });
+}
+
+function _supUpdateFileUI(msg, bg, color){
+  /* تحديث حالة الصورة بدون إعادة رسم كامل */
+  var el = document.getElementById("sup-file-status");
+  if(el){ el.textContent=msg; el.style.background=bg; el.style.color=color; el.style.display="block"; }
 }
 function sSaveN(){
   if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول المطلوبة");return;}
@@ -944,10 +984,10 @@ function rAdmin(){
     +'<th>رقم الطلب</th><th>السائق</th><th>السيارة</th><th>نوع الصيانة</th><th>ملاحظات</th><th>الصورة</th><th>الحالة</th><th>التاريخ</th><th>الإجراء</th>'
     +'</tr></thead><tbody>'+rows+archRows+'</tbody></table></div></div>';
 }
-function aApprove(id){
+function aApprove(id){var id=+arguments[0]||arguments[0];
   var ts=nowTs();
   requests=requests.map(function(r){
-    return r.id===id ? Object.assign({},r,{
+    return (r.id===id||r.id==id) ? Object.assign({},r,{
       status:"approved",
       ts_approve:ts,
       approvedBy:CR?CR.name:""
@@ -1043,15 +1083,16 @@ function rMnt(){
 }
 function mDone(id){
   var ts=nowTs();
+  var nid=+id; /* تحويل لرقم */
   requests=requests.map(function(r){
-    return r.id===id ? Object.assign({},r,{
+    return (r.id===nid||r.id==id) ? Object.assign({},r,{
       mntStatus:"done",
       mntNote:"تمت بتاريخ "+today(),
       ts_done:ts,
       doneBy:CR?CR.name:""
     }) : r;
   });
-  checkArchive(id);
+  checkArchive(nid);
   mUid=null;
   fbSaveAll();
   rMnt();
@@ -2610,6 +2651,7 @@ function _showSupForm(isEdit){
     +'<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">'
     +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:12px">صورة الطلب <span style="color:var(--rd)">*</span></div>'
     +fileHtml
+    +'<div id="sup-file-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:8px;font-weight:600"></div>'
     +'<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;border:2px dashed '+(sF&&!sF._uploading?'var(--gr)':'var(--border)')+';border-radius:10px;cursor:pointer;background:#f8fafc;font-size:14px;color:var(--txt2);transition:all .2s">'
     +'📷 '+(sF&&!sF._uploading?'تغيير الصورة':'اختر صورة أو PDF')+' '
     +'<input type="file" accept="image/*,.pdf" style="display:none" onchange="sFPick(this.files[0],false)">'
