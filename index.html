@@ -414,34 +414,18 @@ var userIdCounter=4;
 /* ══ DB ══ */
 var DB={
   branches:["اشبيليا","فرع الرياض","فرع جدة","فرع الدمام","فرع المدينة"],
-  drivers:[
-    {branch:"اشبيليا",name:"سليمان احمد ملهي اليوسفي",car:"تويوتا هايلاكس",plate:"ب ح ج 7978",make:"سوزوكي",model:"فان بضاعة",year:"2017",regType:"نقل خاص"},
-    {branch:"فرع الرياض",name:"أحمد العتيبي",car:"تويوتا هايلاكس",plate:"أ ب ج 1234",make:"تويوتا",model:"هايلاكس",year:"2021",regType:"نقل خاص"},
-    {branch:"فرع الرياض",name:"محمد القحطاني",car:"فورد F-150",plate:"د هـ و 5678",make:"فورد",model:"F-150",year:"2020",regType:"نقل خاص"},
-    {branch:"فرع الرياض",name:"سعد المطيري",car:"شيفروليه سيلفرادو",plate:"ز ح ط 9012",make:"شيفروليه",model:"سيلفرادو",year:"2019",regType:"نقل خاص"},
-    {branch:"فرع جدة",name:"خالد الزهراني",car:"نيسان باترول",plate:"ي ك ل 3456",make:"نيسان",model:"باترول",year:"2022",regType:"نقل خاص"},
-    {branch:"فرع جدة",name:"سالم الغامدي",car:"تويوتا لاندكروزر",plate:"م ن س 7890",make:"تويوتا",model:"لاندكروزر",year:"2018",regType:"نقل خاص"},
-    {branch:"فرع الدمام",name:"فهد الدوسري",car:"ميتسوبيشي L200",plate:"ع ف ص 2345",make:"ميتسوبيشي",model:"L200",year:"2020",regType:"نقل خاص"},
-    {branch:"فرع الدمام",name:"ناصر العجمي",car:"إيسوزو D-Max",plate:"ق ر ش 6789",make:"إيسوزو",model:"D-Max",year:"2017",regType:"نقل عام"},
-    {branch:"فرع المدينة",name:"عمر البلوي",car:"تويوتا هايلاكس",plate:"ت ث خ 1122",make:"تويوتا",model:"هايلاكس",year:"2019",regType:"نقل خاص"},
-  ],
+  drivers:[],
   items:{
     periodic:["تغيير زيت المحرك","تغيير فلتر الهواء","تغيير فلتر الوقود","فحص الفرامل","تغيير الإطارات","فحص البطارية","صيانة التكييف","فحص السائل المبرد"],
     emergency:["تلف في المحرك","عطل ناقل الحركة","تهالك الفرامل","حادث وتلف هيكل","عطل التوجيه","انفجار إطار","عطل كهربائي","تسريب وقود"]
   }
 };
 
-var seqCounter=5;
+var seqCounter=0;
 function nextSeq(){seqCounter++;return String(seqCounter).padStart(7,'0');}
 
 /* archived = closed (done/undone finalised + admin approved) */
-var requests=[
-  {seq:"0000001",id:1,branch:"فرع الرياض",driver:"محمد القحطاني",car:"فورد F-150",plate:"د هـ و 5678",mtype:"emergency",mitem:"عطل ناقل الحركة",notes:"صوت عند نقل السرعة",file:"صورة_001.jpg",fileUrl:null,status:"rejected",rejectReason:"الصورة غير واضحة، يرجى إعادة الرفع",date:"2025-06-20",archived:false},
-  {seq:"0000002",id:2,branch:"فرع الرياض",driver:"سعد المطيري",car:"شيفروليه سيلفرادو",plate:"ز ح ط 9012",mtype:"periodic",mitem:"تغيير زيت المحرك",notes:"",file:"صورة_002.jpg",fileUrl:null,status:"approved",date:"2025-06-22",mntStatus:"done",mntNote:"تمت بتاريخ 2025-06-23",archived:true},
-  {seq:"0000003",id:3,branch:"فرع الرياض",driver:"أحمد العتيبي",car:"تويوتا هايلاكس",plate:"أ ب ج 1234",mtype:"periodic",mitem:"فحص الفرامل",notes:"",file:"صورة_003.jpg",fileUrl:null,status:"pending",date:"2025-06-24",archived:false},
-  {seq:"0000004",id:4,branch:"فرع جدة",driver:"خالد الزهراني",car:"نيسان باترول",plate:"ي ك ل 3456",mtype:"emergency",mitem:"انفجار إطار",notes:"الخلفي الأيمن",file:"صورة_004.jpg",fileUrl:null,status:"approved",date:"2025-06-23",mntStatus:"done",mntNote:"تم تبديل الإطار",archived:true},
-  {seq:"0000005",id:5,branch:"فرع الدمام",driver:"فهد الدوسري",car:"ميتسوبيشي L200",plate:"ع ف ص 2345",mtype:"periodic",mitem:"صيانة التكييف",notes:"",file:"صورة_005.jpg",fileUrl:null,status:"approved",date:"2025-06-25",mntStatus:null,archived:false},
-];
+var requests=[];
 
 /* ══════════════════════════════════════════════════════════
    FIREBASE SYNC LAYER
@@ -488,11 +472,13 @@ window.addEventListener("fb-ready", function(){
     var hasRealData = raw && (
       (raw.USERS && (Array.isArray(raw.USERS)?raw.USERS.length:Object.keys(raw.USERS||{}).length) > 0) ||
       (raw.requests && Object.keys(raw.requests||{}).length > 0) ||
+      (raw.seqCounter && raw.seqCounter > 0) ||
       (raw.DB && raw.DB.drivers && (Array.isArray(raw.DB.drivers)?raw.DB.drivers.length:Object.keys(raw.DB.drivers||{}).length) > 0)
     );
     if(!hasRealData){
-      console.log("Firebase empty — seeding defaults only");
-      window.FB.set(rootRef,{USERS:USERS,DB:DB,requests:requests,seqCounter:seqCounter});
+      /* Database is truly empty — first time setup only */
+      console.log("Firebase empty — first time setup");
+      window.FB.set(rootRef,{USERS:USERS,DB:DB,requests:[],seqCounter:0});
     }
     /* Read-only realtime listener */
     window.FB.onValue(rootRef, function(snap2){
