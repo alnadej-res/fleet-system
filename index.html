@@ -466,17 +466,52 @@ function fbSaveAll(){
 }
 
 function fbApplyRemote(data){
+  /* قراءة كل شيء من Firebase — هذه الدالة لا تكتب أبداً */
+  if(fbSyncing) return;
   fbSyncing = true;
-  if(data.USERS){
-    USERS = data.USERS;
-    // name migration removed — do not auto-write on load
+  try{
+    /* USERS */
+    if(data.USERS){
+      var u = Array.isArray(data.USERS) ? data.USERS : Object.values(data.USERS);
+      if(u.length > 0) USERS = u;
+      /* تحديث بيانات المستخدم الحالي من Firebase */
+      if(CR){
+        var fresh = USERS.find(function(x){return x.id===CR.id;});
+        if(fresh){ CR=fresh; lpUser=fresh; }
+      }
+    }
+    /* DB */
+    if(data.DB){
+      if(data.DB.branches && data.DB.branches.length > 0) DB.branches = data.DB.branches;
+      if(data.DB.drivers !== undefined){
+        DB.drivers = Array.isArray(data.DB.drivers)
+          ? data.DB.drivers
+          : Object.values(data.DB.drivers||{});
+      }
+      if(data.DB.items) DB.items = data.DB.items;
+    }
+    /* requests — الأهم: تحويل من object إلى array مع الحفاظ على كل الحقول */
+    if(data.requests !== undefined && data.requests !== null){
+      var rawReqs = Array.isArray(data.requests)
+        ? data.requests
+        : Object.values(data.requests);
+      /* رتّب بالتاريخ (الأحدث أولاً) */
+      requests = rawReqs.sort(function(a,b){
+        return (b.id||0) - (a.id||0);
+      });
+    }
+    /* seqCounter */
+    if(typeof data.seqCounter === "number" && data.seqCounter >= 0){
+      seqCounter = data.seqCounter;
+    }
+  }catch(e){
+    console.error("fbApplyRemote error:", e);
   }
-  if(data.DB) DB = data.DB;
-  if(data.requests) requests = data.requests;
-  if(typeof data.seqCounter === "number") seqCounter = data.seqCounter;
   fbSyncing = false;
-  // re-render whatever page is currently open, if logged in
-  if(CR && CP) gp(CP);
+  /* أعد رسم الشاشة الحالية */
+  if(CR && CP){
+    try{ gp(CP); }catch(e){ console.error("re-render error:", e); }
+  }
 }
 
 window.addEventListener("fb-ready", function(){
@@ -909,14 +944,36 @@ function rAdmin(){
     +'<th>رقم الطلب</th><th>السائق</th><th>السيارة</th><th>نوع الصيانة</th><th>ملاحظات</th><th>الصورة</th><th>الحالة</th><th>التاريخ</th><th>الإجراء</th>'
     +'</tr></thead><tbody>'+rows+archRows+'</tbody></table></div></div>';
 }
-function aApprove(id){var ts=nowTs();requests=requests.map(function(r){return r.id===id?Object.assign({},r,{status:"approved",ts_approve:ts}):r;});aRid=null;fbSaveAll();rAdmin();}
+function aApprove(id){
+  var ts=nowTs();
+  requests=requests.map(function(r){
+    return r.id===id ? Object.assign({},r,{
+      status:"approved",
+      ts_approve:ts,
+      approvedBy:CR?CR.name:""
+    }) : r;
+  });
+  aRid=null;
+  fbSaveAll();
+  rAdmin();
+}
 function aShowRej(id){aRid=id;rAdmin();}
 function aDoRej(id){
-  var el=document.getElementById("rr-"+id);var reason=el?el.value.trim():"";
+  var el=document.getElementById("rr-"+id);
+  var reason=el?el.value.trim():"";
   if(!reason){alert("يرجى كتابة سبب الرفض");return;}
   var ts=nowTs();
-  requests=requests.map(function(r){return r.id===id?Object.assign({},r,{status:"rejected",rejectReason:reason,ts_reject:ts}):r;});
-  aRid=null;fbSaveAll();rAdmin();
+  requests=requests.map(function(r){
+    return r.id===id ? Object.assign({},r,{
+      status:"rejected",
+      rejectReason:reason,
+      ts_reject:ts,
+      rejectedBy:CR?CR.name:""
+    }) : r;
+  });
+  aRid=null;
+  fbSaveAll();
+  rAdmin();
 }
 
 /* ══ MAINTENANCE ══ */
@@ -985,8 +1042,19 @@ function rMnt(){
     +'</tr></thead><tbody>'+rows+archRows+'</tbody></table></div></div>';
 }
 function mDone(id){
-  requests=requests.map(function(r){return r.id===id?Object.assign({},r,{mntStatus:"done",mntNote:"تمت بتاريخ "+today()}):r;});
-  checkArchive(id);mUid=null;rMnt();;fbSaveAll();
+  var ts=nowTs();
+  requests=requests.map(function(r){
+    return r.id===id ? Object.assign({},r,{
+      mntStatus:"done",
+      mntNote:"تمت بتاريخ "+today(),
+      ts_done:ts,
+      doneBy:CR?CR.name:""
+    }) : r;
+  });
+  checkArchive(id);
+  mUid=null;
+  fbSaveAll();
+  rMnt();
 }
 function mShowU(id){mUid=id;rMnt();}
 function mDoU(id){
@@ -1238,26 +1306,71 @@ var wfFilter={q:"",status:""};
 
 function getWfSteps(r){
   var steps=[];
-  /* Step 1: رفع الطلب */
-  steps.push({id:"submit",label:"رفع الطلب",icon:"📝",who:"مسؤول سائقين الفرع",whoName:r.driver+" ("+r.branch+")",time:r.date,
-    state:"done",note:"تم رفع الطلب رقم "+r.seq});
-  /* Step 2: مراجعة الإدارة */
+
+  /* ── Step 1: رفع الطلب ── */
+  steps.push({
+    id:"submit", label:"رفع الطلب", icon:"📝",
+    who:"مسؤول سائقين الفرع",
+    whoName:(r.submittedBy||r.driver||"")+" — "+r.branch,
+    time:r.ts_submit||r.date,
+    state:"done",
+    note:"طلب رقم "+r.seq
+  });
+
+  /* ── Step 2: مراجعة الإدارة ── */
   if(r.status==="pending"){
-    steps.push({id:"admin",label:"مراجعة الإدارة",icon:"👤",who:"الإدارة",whoName:"بانتظار المراجعة",time:"—",state:"active",note:""});
+    steps.push({id:"admin",label:"مراجعة الإدارة",icon:"⏳",
+      who:"الإدارة",whoName:"بانتظار المراجعة",time:"—",state:"active",note:""});
+
   } else if(r.status==="rejected"){
-    steps.push({id:"admin",label:"رفض الإدارة",icon:"❌",who:"الإدارة",whoName:"الإدارة",time:r.date,state:"rejected-step",note:r.rejectReason||""});
-    steps.push({id:"edit",label:"تعديل المشرف",icon:"✏️",who:"مسؤول سائقين الفرع",whoName:r.driver,time:"—",state:"active",note:"بانتظار تعديل الطلب"});
+    steps.push({id:"admin",label:"رفض الإدارة",icon:"❌",
+      who:"الإدارة",
+      whoName:r.rejectedBy||"الإدارة",
+      time:r.ts_reject||r.date,
+      state:"rejected-step",
+      note:r.rejectReason||""});
+    steps.push({id:"edit",label:"تعديل الطلب",icon:"✏️",
+      who:"مسؤول سائقين الفرع",whoName:r.driver,time:"—",
+      state:"active",note:"بانتظار تعديل الطلب وإعادة الإرسال"});
+
   } else {
-    steps.push({id:"admin",label:"موافقة الإدارة",icon:"✅",who:"الإدارة",whoName:"الإدارة",time:r.date,state:"done",note:"تمت الموافقة"});
-    /* Step 3: تنفيذ الصيانة */
+    /* موافقة الإدارة */
+    steps.push({id:"admin",label:"موافقة الإدارة",icon:"✅",
+      who:"الإدارة",
+      whoName:r.approvedBy||"الإدارة",
+      time:r.ts_approve||r.date,
+      state:"done",
+      note:"تمت الموافقة"});
+
+    /* ── Step 3: تنفيذ الصيانة ── */
     if(!r.mntStatus){
-      steps.push({id:"mnt",label:"تنفيذ الصيانة",icon:"🔩",who:"مسؤول الصيانة",whoName:"بانتظار التنفيذ",time:"—",state:"active",note:""});
+      steps.push({id:"mnt",label:"تنفيذ الصيانة",icon:"🔩",
+        who:"مسؤول الصيانة",whoName:"بانتظار التنفيذ",
+        time:"—",state:"active",note:""});
+
     } else if(r.mntStatus==="done"){
-      steps.push({id:"mnt",label:"تمت الصيانة",icon:"✅",who:"مسؤول الصيانة",whoName:"مسؤول الصيانة",time:r.date,state:"done",note:r.mntNote||""});
-      steps.push({id:"arch",label:"مؤرشف",icon:"🗄️",who:"النظام",whoName:"تلقائي",time:r.date,state:"done",note:"تم إغلاق الطلب وأرشفته"});
-    } else {
-      steps.push({id:"mnt",label:"لم تتم الصيانة",icon:"⚠️",who:"مسؤول الصيانة",whoName:"مسؤول الصيانة",time:r.date,state:"rejected-step",note:r.mntNote||""});
-      steps.push({id:"arch",label:"مؤرشف",icon:"🗄️",who:"النظام",whoName:"تلقائي",time:r.date,state:"done",note:"تم إغلاق الطلب"});
+      steps.push({id:"mnt",label:"تمت الصيانة",icon:"🔧",
+        who:"مسؤول الصيانة",
+        whoName:r.doneBy||"مسؤول الصيانة",
+        time:r.ts_done||r.date,
+        state:"done",
+        note:r.mntNote||"تمت الصيانة بنجاح"});
+      steps.push({id:"arch",label:"مغلق ومؤرشف",icon:"🗄️",
+        who:"النظام",whoName:"تلقائي",
+        time:r.ts_done||r.date,
+        state:"done",note:"تم إغلاق الطلب وأرشفته تلقائياً"});
+
+    } else if(r.mntStatus==="undone"){
+      steps.push({id:"mnt",label:"لم تتم الصيانة",icon:"⚠️",
+        who:"مسؤول الصيانة",
+        whoName:r.doneBy||"مسؤول الصيانة",
+        time:r.ts_done||r.date,
+        state:"rejected-step",
+        note:r.mntNote||""});
+      steps.push({id:"arch",label:"مغلق",icon:"🗄️",
+        who:"النظام",whoName:"تلقائي",
+        time:r.ts_done||r.date,
+        state:"done",note:"تم إغلاق الطلب"});
     }
   }
   return steps;
