@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.001</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.002</div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -564,10 +564,11 @@ window.addEventListener("fb-ready", function(){
 /* check & auto-archive when mntStatus set */
 function checkArchive(id){
   var nid=+id;
+  var ts=nowTs();
   requests=requests.map(function(r){
     if(r.id!==nid&&r.id!=id)return r;
     if(r.status==="approved"&&(r.mntStatus==="done"||r.mntStatus==="undone"))
-      return Object.assign({},r,{archived:true});
+      return Object.assign({},r,{archived:true, ts_archived:ts});
     return r;
   });
   fbSaveAll();
@@ -865,35 +866,41 @@ function sSetMT(v){sMT=v;sMI="";rSup();}
 var R2_WORKER="https://fleet-images-api.ashraf-m0087.workers.dev";
 function sFPick(f,isEdit){
   if(!f)return;
-  sF=f;sF._uploading=true;sF._uploadDone=false;sFUrl=null;
-  /* تحديث مؤشر الرفع */
+  sF=f; sF._uploading=true; sF._uploadDone=false; sFUrl=null;
   _supUpdateFileUI("⏳ جارٍ رفع الصورة...", "#fef3c7", "#92400e");
-  var fd=new FormData();fd.append("file",f);
+  var fd=new FormData();
+  fd.append("file",f);
   fetch(R2_WORKER+"/upload",{method:"POST",body:fd})
-    .then(function(r){return r.json();})
+    .then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    })
     .then(function(data){
       if(data.url){
         sFUrl=data.url;
         sF._uploading=false;
         sF._uploadDone=true;
         _supUpdateFileUI("✅ تم رفع الصورة: "+f.name, "#dcfce7", "#15803d");
+        /* تحديث أيقونة الملف في الصفحة المستقلة */
+        var lbl=document.querySelector("label[for='sup-file-lbl'], .sup-file-label");
+        if(lbl) lbl.textContent="📎 "+f.name+" ✅";
       } else {
-        alert("فشل رفع الصورة");
-        sF=null;sFUrl=null;
-        _supUpdateFileUI("❌ فشل الرفع — اختر الصورة مجدداً", "#fee2e2", "#dc2626");
+        sF=null; sFUrl=null;
+        _supUpdateFileUI("❌ فشل الرفع — حاول مجدداً", "#fee2e2", "#dc2626");
       }
     })
     .catch(function(e){
-      alert("فشل الاتصال بخادم الصور: "+e.message);
-      sF=null;sFUrl=null;
-      _supUpdateFileUI("❌ فشل الاتصال", "#fee2e2", "#dc2626");
+      sF=null; sFUrl=null;
+      _supUpdateFileUI("❌ فشل الاتصال: "+e.message, "#fee2e2", "#dc2626");
     });
 }
 
 function _supUpdateFileUI(msg, bg, color){
-  /* تحديث حالة الصورة بدون إعادة رسم كامل */
-  var el = document.getElementById("sup-file-status");
-  if(el){ el.textContent=msg; el.style.background=bg; el.style.color=color; el.style.display="block"; }
+  /* تحديث كل عناصر حالة الصورة */
+  ["sup-file-status","sup-file-status-edit"].forEach(function(id){
+    var el=document.getElementById(id);
+    if(el){ el.textContent=msg; el.style.background=bg; el.style.color=color; el.style.display="block"; }
+  });
 }
 function sSaveN(){
   if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول المطلوبة");return;}
@@ -2123,11 +2130,8 @@ sEditOpen=function(id){
 /* patch sSaveN/sSaveE to use sItems */
 var _origSSaveN2=_origSSaveN||sSaveN;
 sSaveN=function(){
-  if(!sB||!sD){alert("يرجى اختيار الفرع والسائق");return;}
-  if(!sItems||!sItems.length){alert("يرجى اختيار بند صيانة واحد على الأقل");return;}
-  if(!sF){alert("يرجى إرفاق صورة الطلب");return;}
+  /* جميع الحقول اختيارية */
   if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
-  if(!sFUrl){alert("لم تكتمل عملية رفع الصورة، يرجى إعادة اختيار الصورة");return;}
   /* اشتق نوع الصيانة من البنود */
   var hasEmergency=sItems.some(function(x){return (x.mtype||x)==="emergency"||(x&&x.mtype==="emergency");});
   var derivedMT=hasEmergency?"emergency":"periodic";
@@ -2137,21 +2141,28 @@ sSaveN=function(){
     return sItems.length>1?name+" ("+(type==="emergency"?"طارئ":"دوري")+")":name;
   }).join(" + ");
   var d=gdrv(sB,sD);var ts=nowTs();
-  requests.unshift({seq:nextSeq(),id:Date.now(),branch:sB,driver:sD,
-    car:d?d.car:"",plate:d?d.plate:"",
-    mtype:derivedMT,
-    mitem:itemsLabel,
+  requests.unshift({
+    seq:nextSeq(), id:Date.now(),
+    branch:sB||"", driver:sD||"",
+    car:d?d.car:"", plate:d?d.plate:"",
+    make:d?d.make:"", model:d?d.model:"", year:d?d.year:"",
+    mtype:derivedMT||"periodic",
+    mitem:itemsLabel||"",
     mItems:sItems.map(function(x){return x.item||x;}),
     mItemsTyped:sItems.slice(),
-    notes:sN,file:sF.name,fileUrl:sFUrl,status:"pending",
-    date:ts.slice(0,10),ts_submit:ts,archived:false,
-    submittedBy:CR?CR.name:""});
+    notes:sN||"",
+    file:sF?sF.name:"",
+    fileUrl:sFUrl||"",
+    status:"pending",
+    date:ts.slice(0,10), ts_submit:ts,
+    archived:false,
+    submittedBy:CR?CR.name:""
+  });
   sCl();fbSaveAll();
 };
 var _origSSaveE2=_origSSaveE||sSaveE;
 sSaveE=function(){
-  if(!sB||!sD){alert("يرجى اختيار الفرع والسائق");return;}
-  if(!sItems||!sItems.length){alert("يرجى اختيار بند صيانة واحد على الأقل");return;}
+  /* جميع الحقول اختيارية */
   var d=gdrv(sB,sD);var ts=nowTs();
   requests=requests.map(function(r){
     return r.id===sEid?Object.assign({},r,{branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",
@@ -2730,8 +2741,8 @@ function _showSupForm(isEdit){
     +'<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:8px">صورة الطلب <span style="color:var(--rd)">*</span></div>'
     +'<div id="sup-file-status" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:8px;font-weight:600"></div>'
     +'<label style="display:flex;align-items:center;justify-content:center;gap:10px;padding:20px;border:2px dashed var(--border);border-radius:10px;cursor:pointer;background:#f8fafc;font-size:14px;color:var(--txt2)">'
-    +'📷 اختر صورة أو PDF'
-    +'<input type="file" accept="image/*,.pdf" style="display:none" onchange="sFPick(this.files[0],false)">'
+    +'<span id="sup-file-lbl-txt">📷 اختر صورة أو PDF</span>'
+    +'<input type="file" accept="image/*,.pdf" style="display:none" onchange="(function(f){sFPick(f,false);if(f){var lbl=document.getElementById(\'sup-file-lbl-txt\');if(lbl)lbl.textContent=\'📎 \'+f.name;}})(this.files[0])">'
     +'</label>'
     +'</div>'
 
