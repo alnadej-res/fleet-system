@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.003</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.004</div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -2126,47 +2126,83 @@ sEditOpen=function(id){
 /* patch sSaveN/sSaveE to use sItems */
 var _origSSaveN2=sSaveN;
 sSaveN=function(){
-  /* جميع الحقول اختيارية */
-  if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
-  /* اشتق نوع الصيانة من البنود */
-  var hasEmergency=sItems.some(function(x){return (x.mtype||x)==="emergency"||(x&&x.mtype==="emergency");});
-  var derivedMT=hasEmergency?"emergency":"periodic";
-  var itemsLabel=sItems.map(function(x){
-    var name=x.item||x;
-    var type=x.mtype||"periodic";
-    return sItems.length>1?name+" ("+(type==="emergency"?"طارئ":"دوري")+")":name;
-  }).join(" + ");
-  var d=gdrv(sB,sD);var ts=nowTs();
-  requests.unshift({
-    seq:nextSeq(), id:Date.now(),
-    branch:sB||"", driver:sD||"",
-    car:d?d.car:"", plate:d?d.plate:"",
-    make:d?d.make:"", model:d?d.model:"", year:d?d.year:"",
-    mtype:derivedMT||"periodic",
-    mitem:itemsLabel||"",
-    mItems:sItems.map(function(x){return x.item||x;}),
-    mItemsTyped:sItems.slice(),
-    notes:sN||"",
-    file:sF?sF.name:"",
-    fileUrl:sFUrl||"",
-    status:"pending",
-    date:ts.slice(0,10), ts_submit:ts,
-    archived:false,
-    submittedBy:CR?CR.name:""
-  });
-  sCl();fbSaveAll();
+  try{
+    if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
+    var itemsList=Array.isArray(sItems)?sItems:[];
+    var hasEmergency=itemsList.some(function(x){return x&&(x.mtype||x)==="emergency";});
+    var derivedMT=hasEmergency?"emergency":"periodic";
+    var itemsLabel=itemsList.map(function(x){
+      var name=(x&&x.item)||x||"";
+      var mtype=(x&&x.mtype)||"periodic";
+      return itemsList.length>1?name+" ("+(mtype==="emergency"?"طارئ":"دوري")+")":name;
+    }).join(" + ");
+    var d=gdrv(sB,sD)||{};
+    var ts=nowTs();
+    var newReq={
+      seq:nextSeq(), id:Date.now(),
+      branch:sB||"", driver:sD||"",
+      car:d.car||"", plate:d.plate||"",
+      make:d.make||"", model:d.model||"", year:d.year||"",
+      mtype:derivedMT,
+      mitem:itemsLabel,
+      mItems:itemsList.map(function(x){return (x&&x.item)||x||"";}),
+      mItemsTyped:itemsList.slice(),
+      notes:sN||"",
+      file:sF?sF.name:"",
+      fileUrl:sFUrl||"",
+      status:"pending",
+      date:ts.slice(0,10), ts_submit:ts,
+      archived:false,
+      submittedBy:CR?CR.name:""
+    };
+    requests.unshift(newReq);
+    sCl();
+    fbSaveAll();
+  }catch(err){
+    console.error("sSaveN error:",err);
+    alert("خطأ في الإرسال: "+err.message);
+  }
 };
 var _origSSaveE2=sSaveE;
 sSaveE=function(){
-  /* جميع الحقول اختيارية */
-  var d=gdrv(sB,sD);var ts=nowTs();
-  requests=requests.map(function(r){
-    return r.id===sEid?Object.assign({},r,{branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",
-      mtype:sMT,mitem:sItems.join(" + "),mItems:sItems.slice(),
-      notes:sN,file:sF?sF.name:r.file,fileUrl:sFUrl||r.fileUrl,
-      status:"pending",rejectReason:undefined,date:ts.slice(0,10),ts_submit:ts,ts_reject:null,ts_approve:null}):r;
-  });
-  sCl();fbSaveAll();
+  try{
+    var itemsList=Array.isArray(sItems)?sItems:[];
+    var hasEmergency=itemsList.some(function(x){return x&&(x.mtype||x)==="emergency";});
+    var derivedMT=hasEmergency?"emergency":"periodic";
+    var itemsLabel=itemsList.map(function(x){
+      var name=(x&&x.item)||x||"";
+      var mtype=(x&&x.mtype)||"periodic";
+      return itemsList.length>1?name+" ("+(mtype==="emergency"?"طارئ":"دوري")+")":name;
+    }).join(" + ");
+    var d=gdrv(sB,sD)||{};
+    var ts=nowTs();
+    var eid=+sEid||sEid;
+    requests=requests.map(function(r){
+      if(r.id!==eid&&r.id!=sEid)return r;
+      return Object.assign({},r,{
+        branch:sB||r.branch, driver:sD||r.driver,
+        car:d.car||r.car, plate:d.plate||r.plate,
+        mtype:derivedMT,
+        mitem:itemsLabel||r.mitem,
+        mItems:itemsList.map(function(x){return (x&&x.item)||x||"";}),
+        mItemsTyped:itemsList.slice(),
+        notes:sN||r.notes,
+        file:sF?sF.name:r.file,
+        fileUrl:sFUrl||r.fileUrl,
+        status:"pending",
+        rejectReason:undefined,
+        date:ts.slice(0,10),
+        ts_submit:ts,
+        ts_reject:null,
+        ts_approve:null
+      });
+    });
+    sCl();
+    fbSaveAll();
+  }catch(err){
+    console.error("sSaveE error:",err);
+    alert("خطأ في الحفظ: "+err.message);
+  }
 };
 
 /* ── CHANGE PASSWORD ── */
