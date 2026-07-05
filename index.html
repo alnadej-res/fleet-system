@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.008</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | <v2026 class="010"></v2026></div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -5393,36 +5393,6 @@ function saDoChgPw(id){
 }
 
 /* ── TILE LOGIN STEP 1+2 ── */
-function doLoginStep1(){
-  try{
-    var u=(document.getElementById("lu").value||"").trim();
-    var p=document.getElementById("lp-pw").value||"";
-    if(!u){
-      var e=document.getElementById("l-err");
-      if(e){e.style.display="block";e.textContent="يرجى إدخال اسم المستخدم";}
-      return;
-    }
-    var searchList=(USERS&&USERS.length>0)?USERS:(DEFAULT_USERS||[]);
-    var user=searchList.find(function(x){return x.username===u&&x.password===p&&x.active;});
-    var err=document.getElementById("l-err");
-    if(!user){
-      if(err){err.style.display="block";err.textContent="اسم المستخدم أو كلمة المرور غير صحيحة";}
-      return;
-    }
-    if(err)err.style.display="none";
-    lpUser=user;
-    var s1=document.getElementById("lp-step1");
-    var s2=document.getElementById("lp-step2");
-    if(s1)s1.style.display="none";
-    if(s2){s2.style.display="flex";s2.style.flexDirection="column";s2.style.minHeight="100vh";}
-    var wel=document.getElementById("lp-welcome");
-    if(wel)wel.textContent="مرحباً، "+user.name;
-    try{buildTiles(user);}catch(e2){console.error("buildTiles error:",e2);}
-  }catch(e){
-    console.error("doLoginStep1 error:",e);
-    alert("خطأ في تسجيل الدخول: "+e.message);
-  }
-}
 
 function buildTiles(user){
   var allowed=roles[user.role]?roles[user.role].pages:[];
