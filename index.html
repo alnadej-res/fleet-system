@@ -2151,7 +2151,7 @@ sEditOpen=function(id){
 };
 
 /* patch sSaveN/sSaveE to use sItems */
-var _origSSaveN2=sSaveN;
+var _origSSaveN2=(typeof sSaveN==="function")?sSaveN:null;
 sSaveN=function(){
   try{
     if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
@@ -2190,7 +2190,7 @@ sSaveN=function(){
     alert("خطأ في الإرسال: "+err.message);
   }
 };
-var _origSSaveE2=sSaveE;
+var _origSSaveE2=(typeof sSaveE==="function")?sSaveE:null;
 sSaveE=function(){
   try{
     var itemsList=Array.isArray(sItems)?sItems:[];
@@ -3463,28 +3463,7 @@ tr.clickable:hover td{background:#f0f7ff!important}
 
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, set, get, update, remove, onValue, push, child } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyBLRbqkxH0rPvI6sKdprKAP6_W_TjgY3hY",
-  authDomain: "fleet-maintenance-system-d246b.firebaseapp.com",
-  databaseURL: "https://fleet-maintenance-system-d246b-default-rtdb.firebaseio.com",
-  projectId: "fleet-maintenance-system-d246b",
-  storageBucket: "fleet-maintenance-system-d246b.firebasestorage.app",
-  messagingSenderId: "781536734673",
-  appId: "1:781536734673:web:b269d95a8b625c758f84f0"
-};
-
-const fbApp = initializeApp(firebaseConfig);
-const db = getDatabase(fbApp);
-
-// Expose a thin global bridge so the existing non-module script can call Firebase
-window.FB = { ref, set, get, update, remove, onValue, push, child, db };
-/* Dispatch fb-ready immediately so UI is never blocked */
-window.dispatchEvent(new Event("fb-ready"));
-</script>
 <script>
 /* Enable login button immediately on page load — no Firebase wait */
 document.addEventListener("DOMContentLoaded", function(){
@@ -3526,7 +3505,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.008</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.010</div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -5317,8 +5296,7 @@ sEditOpen=function(id){
 };
 
 /* patch sSaveN/sSaveE to use sItems */
-var _origSSaveN2=sSaveN;
-sSaveN=function(){
+var _origSSaveN2 = (typeof sSaveN === "function") ? sSaveN : null;sSaveN=function(){
   try{
     if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
     var itemsList=Array.isArray(sItems)?sItems:[];
