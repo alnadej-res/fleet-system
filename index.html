@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.002</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.003</div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -454,15 +454,22 @@ var fbReady = false;
 var fbSyncing = false; // guard to avoid write-loops while applying remote data
 
 function fbSaveAll(){
-  /* Guards: not syncing + user logged in (fbReady optional — FB may connect later) */
-  if(fbSyncing || !CR) return;
-  if(!window.FB){return;} /* Firebase not loaded yet */
+  /* يحفظ فقط إذا المستخدم مسجّل دخول وFirebase متاح */
+  if(!CR) return;
+  if(!window.FB) return;
+  /* إذا كان sync جارياً، أجّل الحفظ 300ms */
+  if(fbSyncing){
+    setTimeout(fbSaveAll, 300);
+    return;
+  }
   window.FB.set(window.FB.ref(window.FB.db, "/"), {
     USERS: USERS,
     DB: DB,
     requests: requests,
     seqCounter: seqCounter
-  }).catch(function(e){console.error("Firebase save error:", e);});
+  })
+  .then(function(){ console.log("✅ Saved to Firebase"); })
+  .catch(function(e){ console.error("❌ Firebase save error:", e); });
 }
 
 function fbApplyRemote(data){
@@ -902,23 +909,12 @@ function _supUpdateFileUI(msg, bg, color){
     if(el){ el.textContent=msg; el.style.background=bg; el.style.color=color; el.style.display="block"; }
   });
 }
-function sSaveN(){
-  if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول المطلوبة");return;}
-  if(!sF){alert("يرجى إرفاق صورة الطلب");return;}
-  var d=gdrv(sB,sD);
-  requests.unshift({seq:nextSeq(),id:Date.now(),branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",mtype:sMT,mitem:sMI,notes:sN,file:sF.name,fileUrl:sFUrl,status:"pending",date:today(),archived:false});
-  sCl();
-}
+/* OLD sSaveN deleted */
 function sEditOpen(id){
   var r=requests.find(function(x){return x.id===id;});if(!r)return;
   sEid=id;sB=r.branch;sD=r.driver;sMT=r.mtype;sMI=r.mitem;sN=r.notes||"";sF=null;sFUrl=null;sOpen=false;rSup();
 }
-function sSaveE(){
-  if(!sB||!sD||!sMT||!sMI){alert("يرجى تعبئة جميع الحقول");return;}
-  var d=gdrv(sB,sD);
-  requests=requests.map(function(r){return r.id===sEid?Object.assign({},r,{branch:sB,driver:sD,car:d?d.car:"",plate:d?d.plate:"",mtype:sMT,mitem:sMI,notes:sN,file:sF?sF.name:r.file,fileUrl:sFUrl||r.fileUrl,status:"pending",rejectReason:undefined,date:today()}):r;});
-  sCl();
-}
+/* OLD sSaveE deleted */
 
 /* ══ ADMIN ══ */
 function applyFAdm(list){
@@ -2128,7 +2124,7 @@ sEditOpen=function(id){
 };
 
 /* patch sSaveN/sSaveE to use sItems */
-var _origSSaveN2=_origSSaveN||sSaveN;
+var _origSSaveN2=sSaveN;
 sSaveN=function(){
   /* جميع الحقول اختيارية */
   if(sF&&sF._uploading){alert("الصورة لا تزال تُرفع، يرجى الانتظار");return;}
@@ -2160,7 +2156,7 @@ sSaveN=function(){
   });
   sCl();fbSaveAll();
 };
-var _origSSaveE2=_origSSaveE||sSaveE;
+var _origSSaveE2=sSaveE;
 sSaveE=function(){
   /* جميع الحقول اختيارية */
   var d=gdrv(sB,sD);var ts=nowTs();
