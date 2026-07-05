@@ -360,7 +360,7 @@ document.addEventListener("DOMContentLoaded", function(){
           onkeydown="if(event.key==='Enter')document.getElementById('lp-btn').click()">
       </div>
       <button id="lp-btn" onclick="(function(){try{doLoginStep1();}catch(e){alert('خطأ: '+e.message);console.error(e);}})()" style="width:100%;padding:12px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:1px solid #1d4ed8;border-radius:9px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s">دخول ←</button>
-      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.004</div>
+      <div style="font-size:11px;color:#9ca3af;text-align:center;margin-top:14px">الناضج — نظام متابعة الأسطول © 2026 | v2026.005</div>
     </div>
   </div>
   <div id="lp-step2" style="display:flex;flex-direction:column;min-height:100vh;background:linear-gradient(180deg,#6b0f0f 0%,#8b1a1a 30%,#ffffff 100%);backdrop-filter:none">
@@ -912,7 +912,8 @@ function _supUpdateFileUI(msg, bg, color){
 /* OLD sSaveN deleted */
 function sEditOpen(id){
   var r=requests.find(function(x){return x.id===id;});if(!r)return;
-  sEid=id;sB=r.branch;sD=r.driver;sMT=r.mtype;sMI=r.mitem;sN=r.notes||"";sF=null;sFUrl=null;sOpen=false;rSup();
+  sEid=id;sB=r.branch;sD=r.driver;sMT=r.mtype;sMI=r.mitem;sN=r.notes||"";sF=null;sFUrl=null;sOpen=false;
+  if(typeof _showSupForm==="function"){ _showSupForm(true); } else { rSup(); }
 }
 /* OLD sSaveE deleted */
 
@@ -2016,7 +2017,11 @@ function sItemsCell(isEdit){
 
 /* patch sOpenRow / sCl / sSetMT to reset sItems */
 var _origSOpenRow=sOpenRow;
-sOpenRow=function(){sOpen=true;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFUrl=null;sEid=null;sItems=[];sOther="";rSup();};
+sOpenRow=function(){
+  sOpen=true;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFUrl=null;sEid=null;sItems=[];sOther="";
+  if(typeof _showSupForm==="function"){ _showSupForm(false); }
+  else { rSup(); }
+};
 
 /* ── Supervisor form helpers — update DOM without full redraw ── */
 function _supSetB(v){
@@ -2112,7 +2117,11 @@ function _supAddOtherItem(){
 }
 
 var _origSCl=sCl;
-sCl=function(){sOpen=false;sEid=null;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFUrl=null;sItems=[];sOther="";rSup();};
+sCl=function(){
+  sOpen=false;sEid=null;sB="";sD="";sMT="";sMI="";sN="";sF=null;sFUrl=null;sItems=[];sOther="";
+  var _origRSup2 = typeof _origRSup_pg==="function" ? _origRSup_pg : rSup;
+  _origRSup2();
+};
 var _origSSetMT=sSetMT;
 sSetMT=function(v){sMT=v;sMI="";sItems=[];sOther="";rSup();};
 var _origSEditOpen=sEditOpen;
@@ -2780,7 +2789,7 @@ function _showSupForm(isEdit){
 
     /* Submit */
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="sSaveN()" style="flex:1;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">✓ إرسال الطلب</button>'
+    +'<button onclick="sEid?sSaveE():sSaveN()" style="flex:1;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">'+(sEid?'✓ حفظ التعديل':'✓ إرسال الطلب')+'</button>'
     +'<button onclick="sCl()" style="padding:14px 24px;background:var(--bg);border:1px solid var(--border);border-radius:10px;font-size:14px;cursor:pointer;font-family:inherit">إلغاء</button>'
     +'</div>'
     +'</div>';
